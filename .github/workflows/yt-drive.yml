@@ -65,7 +65,8 @@ jobs:
           echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
           # yt-dlp from pip so the PO-token plugin is discovered next to it
           python3 -m venv "$HOME/ytv"
-          "$HOME/ytv/bin/pip" install -q -U "yt-dlp[default]" bgutil-ytdlp-pot-provider
+          # curl-cffi: browser impersonation, needed by sites like kan.org.il (generic extractor + Kaltura HLS)
+          "$HOME/ytv/bin/pip" install -q -U "yt-dlp[default,curl-cffi]" bgutil-ytdlp-pot-provider
           echo "$HOME/ytv/bin" >> "$GITHUB_PATH"
           "$HOME/ytv/bin/yt-dlp" --version
 
@@ -90,7 +91,8 @@ jobs:
         run: |
           mkdir -p out
           COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors
-                  --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416")
+                  --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"
+                  --extractor-args "generic:impersonate")
           [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
           # routes to try, in order: a user proxy if given; else Cloudflare WARP first (GitHub IPs are bot-flagged), then direct
           if [ -n "$YT_PROXY" ]; then ROUTES=("$YT_PROXY"); else ROUTES=(); [ "$WARP" = 1 ] && ROUTES+=(socks5://127.0.0.1:40000); ROUTES+=(direct); fi
