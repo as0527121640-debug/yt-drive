@@ -46,22 +46,36 @@ jobs:
       QUALITY: ${{ inputs.quality }}
       PLAYLIST: ${{ inputs.playlist }}
       RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
+      YT_COOKIES: ${{ secrets.YT_COOKIES }}          # optional: Netscape cookies.txt of a (secondary) Google account
+      YT_PROXY: ${{ secrets.YT_PROXY }}              # optional: http(s)/socks proxy, e.g. a residential/Israeli one
       DRIVE_DIR: ${{ vars.DRIVE_DIR || 'YouTube' }}
+    # YouTube flags datacenter IPs ("Sign in to confirm you're not a bot"). The open-source answer (yt-dlp, cobalt,
+    # Invidious) is a chain: PO token + visitor_data from a BotGuard generator, then alternate player clients, then
+    # cookies/proxy if provided. The generator runs here as a sidecar - the one yt-dlp's own PO-token guide recommends.
+    services:
+      pot:
+        image: brainicism/bgutil-ytdlp-pot-provider
+        ports: ["4416:4416"]
     steps:
       - name: Install tools
         run: |
           sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg
-          # deno: modern yt-dlp needs a JS runtime to solve YouTube's player challenge, or videos come back "unavailable"
+          # deno: yt-dlp's JS runtime for YouTube's player challenge
           curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1
           echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
-          sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-          sudo chmod +x /usr/local/bin/yt-dlp
-          yt-dlp --version
+          # yt-dlp from pip so the PO-token plugin is discovered next to it
+          python3 -m venv "$HOME/ytv"
+          "$HOME/ytv/bin/pip" install -q -U "yt-dlp[default]" bgutil-ytdlp-pot-provider
+          echo "$HOME/ytv/bin" >> "$GITHUB_PATH"
+          "$HOME/ytv/bin/yt-dlp" --version
 
       - name: Download
         run: |
           mkdir -p out
-          COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors)
+          COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors
+                  --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416")
+          [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
+          [ -n "$YT_PROXY" ] && { COMMON+=(--proxy "$YT_PROXY"); echo "using proxy"; }
           # whole playlist (capped at 50) vs a single video
           if [ "$PLAYLIST" = "yes" ]; then
             COMMON+=(--yes-playlist --playlist-end 50 -o "out/%(playlist_title|)s/%(playlist_index&{} - |)s%(title)s.%(ext)s")
@@ -69,14 +83,21 @@ jobs:
             COMMON+=(--no-playlist -o "out/%(title)s.%(ext)s")
           fi
           if [ "$FORMAT" = "audio" ]; then
-            yt-dlp "${COMMON[@]}" -x --audio-format mp3 --audio-quality 0 "$INPUT"
+            FMT=(-x --audio-format mp3 --audio-quality 0)
           else
             case "$QUALITY" in
               best) SEL="bv*+ba/b" ;;
               *)    SEL="bv*[height<=$QUALITY]+ba/b[height<=$QUALITY]" ;;
             esac
-            yt-dlp "${COMMON[@]}" -f "$SEL" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*" "$INPUT"
+            FMT=(-f "$SEL" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*")
           fi
+          # fallback chain of player clients: stop at the first that produces files
+          for CLIENTS in "default" "web_embedded" "tv,mweb" "web_safari,android_vr"; do
+            echo "::group::try player_client=$CLIENTS"
+            yt-dlp "${COMMON[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" && ok=1 || ok=0
+            echo "::endgroup::"
+            [ "$(find out -type f | wc -l)" -gt 0 ] && { echo "OK with player_client=$CLIENTS"; break; }
+          done
           n=$(find out -type f | wc -l)
           [ "$n" -gt 0 ] || { echo "::error::nothing downloaded"; exit 1; }
           echo "COUNT=$n" >> "$GITHUB_ENV"
