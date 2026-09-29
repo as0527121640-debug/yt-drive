@@ -258,6 +258,15 @@ function ago(iso){const s=(Date.now()-new Date(iso))/1000;if(s<60)return'עכש�
 function badge(j){if(j.status==='pending'||j.status==='queued')return'<span class="badge b-wait"><span class="spin"></span>ממתין</span>';
  if(j.status!=='completed')return'<span class="badge b-run"><span class="spin"></span>מוריד</span>';
  if(j.conclusion==='success')return'<span class="badge b-ok">מוכן ✓</span>';if(j.conclusion==='cancelled')return'<span class="badge b-bad">בוטל</span>';return'<span class="badge b-bad">נכשל</span>'}
+function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
+ if(/not made this video available in your country|not available in your country/i.test(r))return'הסרטון חסום מחוץ לישראל (למשל תוכן של כאן 11), והשרת בענן נמצא בחו"ל.';
+ if(/private video/i.test(r))return'זה סרטון פרטי — אי אפשר להוריד אותו.';
+ if(/confirm your age|age-restricted|inappropriate/i.test(r))return'לסרטון יש הגבלת גיל ויוטיוב דורש התחברות.';
+ if(/members|join this channel/i.test(r))return'הסרטון זמין רק לחברי ערוץ.';
+ if(/not a bot/i.test(r))return'יוטיוב חסם את השרת הפעם. נסה שוב בעוד כמה דקות.';
+ if(/live event|premiere|is not currently live|will begin/i.test(r))return'זה שידור חי או בכורה שעוד לא הסתיימו.';
+ if(/unavailable|removed|terminated/i.test(r))return'הסרטון לא זמין (הוסר, נחסם או מוגבל).';
+ return r?('לא הצליח: '+r):'לא הצליח. "פרטים" מראה את הסיבה.'}
 const STEP={'Set up job':'מכין שרת','Install tools':'מכין כלים','Download':'מוריד מיוטיוב','Deliver':'שולח לדרייב','Publish result':'מסיים','Cleanup old files':'מסיים'};
 function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div class="panel empty">עוד אין הורדות — חפש משהו למעלה</div>';return}const M=metaAll();
  box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const m=M[j.id]||{};const src=m.label||j.input||'';let body='';
@@ -268,7 +277,7 @@ function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div c
    if(drive)body+='<span class="done">נשמר בגוגל דרייב ✓</span>';
    else if(f)body+=`<a class="dl" href="${f.url}">⬇ ${/\.zip$/i.test(f.name)?'הורד את כל הקבצים (ZIP)':'הורד'} · ${(f.size/1048576).toFixed(1)}MB</a>`;
    body+=`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">פרטים</a></div>`;
-   if(j.conclusion!=='success'&&!f)body='<div class="step">לא הצליח — לרוב סרטון חסום, פרטי או מוגבל לאזור. "פרטים" מראה את הסיבה.</div>'+body;
+   if(j.conclusion!=='success'&&!f)body=`<div class="step">${esc(whyFailed(d.summary||''))}</div>`+body;
    if(d.summary)body+=`<details style="margin-top:8px"><summary class="label" style="cursor:pointer">סיכום</summary><pre class="sum">${esc(d.summary)}</pre></details>`}
   return `<div class="panel job"><div class="top"><div style="flex:1;min-width:0"><div class="src">${esc(src)}</div>
    <div class="sub">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="when">${ago(j.created_at)}</span></div></div>${badge(j)}</div>${body}</div>`}).join('')}

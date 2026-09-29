@@ -114,13 +114,18 @@ jobs:
             PX=(); [ "$ROUTE" != direct ] && PX=(--proxy "$ROUTE")
             for CLIENTS in "default" "web_embedded" "tv,mweb" "web_safari,android_vr"; do
               echo "::group::try route=$ROUTE player_client=$CLIENTS"
-              yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" && ok=1 || ok=0
+              yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" 2>&1 | tee -a dl.log || true
               echo "::endgroup::"
               [ "$(find out -type f | wc -l)" -gt 0 ] && { echo "OK via route=$ROUTE player_client=$CLIENTS"; break 2; }
             done
           done
           n=$(find out -type f | wc -l)
-          [ "$n" -gt 0 ] || { echo "::error::nothing downloaded"; exit 1; }
+          if [ "$n" -eq 0 ]; then
+            # keep the most telling reason for the site (geo-block beats the generic "unavailable")
+            r=$(grep -m1 -E "not made this video available in your country" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
+            echo "REASON=$(printf '%s' "$r" | sed 's/^ERROR: \[youtube\] [^:]*: //' | tr -d '\r' | cut -c1-200)" >> "$GITHUB_ENV"
+            echo "::error::nothing downloaded: $r"; exit 1
+          fi
           echo "COUNT=$n" >> "$GITHUB_ENV"
           du -sh out; find out -type f -printf '%P\n'
 
@@ -148,7 +153,7 @@ jobs:
         if: always() && inputs.job_id != ''
         run: |
           notes=$(mktemp)
-          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED - see the run log' }}"; } > "$notes"
+          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; } > "$notes"
           files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
           gh release create "job-$JOB_ID" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
             --title "yt $JOB_ID" --notes-file "$notes" "${files[@]}"
