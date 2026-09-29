@@ -69,13 +69,31 @@ jobs:
           echo "$HOME/ytv/bin" >> "$GITHUB_PATH"
           "$HOME/ytv/bin/yt-dlp" --version
 
+      # Cloudflare WARP in proxy mode: a free egress through Cloudflare's IPs instead of GitHub's flagged Azure ones.
+      - name: Start Cloudflare WARP (proxy mode)
+        continue-on-error: true
+        run: |
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list >/dev/null
+          sudo apt-get -qq update && sudo apt-get -qq install -y cloudflare-warp
+          sudo systemctl start warp-svc || true; sleep 3
+          warp-cli --accept-tos registration new
+          warp-cli --accept-tos mode proxy
+          warp-cli --accept-tos connect
+          for i in $(seq 1 15); do
+            ip=$(curl -s --max-time 5 --socks5-hostname 127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(ip|warp|loc)=' | tr '\n' ' ')
+            case "$ip" in *warp=on*|*warp=plus*) echo "WARP up: $ip"; echo "WARP=1" >> "$GITHUB_ENV"; break;; esac
+            sleep 2
+          done
+
       - name: Download
         run: |
           mkdir -p out
           COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors
                   --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416")
           [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
-          [ -n "$YT_PROXY" ] && { COMMON+=(--proxy "$YT_PROXY"); echo "using proxy"; }
+          # routes to try, in order: a user proxy if given; else GitHub's own IP, then Cloudflare WARP
+          if [ -n "$YT_PROXY" ]; then ROUTES=("$YT_PROXY"); else ROUTES=(direct); [ "$WARP" = 1 ] && ROUTES+=(socks5://127.0.0.1:40000); fi
           # whole playlist (capped at 50) vs a single video
           if [ "$PLAYLIST" = "yes" ]; then
             COMMON+=(--yes-playlist --playlist-end 50 -o "out/%(playlist_title|)s/%(playlist_index&{} - |)s%(title)s.%(ext)s")
@@ -92,11 +110,14 @@ jobs:
             FMT=(-f "$SEL" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*")
           fi
           # fallback chain of player clients: stop at the first that produces files
-          for CLIENTS in "default" "web_embedded" "tv,mweb" "web_safari,android_vr"; do
-            echo "::group::try player_client=$CLIENTS"
-            yt-dlp "${COMMON[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" && ok=1 || ok=0
-            echo "::endgroup::"
-            [ "$(find out -type f | wc -l)" -gt 0 ] && { echo "OK with player_client=$CLIENTS"; break; }
+          for ROUTE in "${ROUTES[@]}"; do
+            PX=(); [ "$ROUTE" != direct ] && PX=(--proxy "$ROUTE")
+            for CLIENTS in "default" "web_embedded" "tv,mweb" "web_safari,android_vr"; do
+              echo "::group::try route=$ROUTE player_client=$CLIENTS"
+              yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" && ok=1 || ok=0
+              echo "::endgroup::"
+              [ "$(find out -type f | wc -l)" -gt 0 ] && { echo "OK via route=$ROUTE player_client=$CLIENTS"; break 2; }
+            done
           done
           n=$(find out -type f | wc -l)
           [ "$n" -gt 0 ] || { echo "::error::nothing downloaded"; exit 1; }
