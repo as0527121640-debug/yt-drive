@@ -92,8 +92,8 @@ jobs:
           COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors
                   --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416")
           [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
-          # routes to try, in order: a user proxy if given; else GitHub's own IP, then Cloudflare WARP
-          if [ -n "$YT_PROXY" ]; then ROUTES=("$YT_PROXY"); else ROUTES=(direct); [ "$WARP" = 1 ] && ROUTES+=(socks5://127.0.0.1:40000); fi
+          # routes to try, in order: a user proxy if given; else Cloudflare WARP first (GitHub IPs are bot-flagged), then direct
+          if [ -n "$YT_PROXY" ]; then ROUTES=("$YT_PROXY"); else ROUTES=(); [ "$WARP" = 1 ] && ROUTES+=(socks5://127.0.0.1:40000); ROUTES+=(direct); fi
           # whole playlist (capped at 50) vs a single video
           if [ "$PLAYLIST" = "yes" ]; then
             COMMON+=(--yes-playlist --playlist-end 50 -o "out/%(playlist_title|)s/%(playlist_index&{} - |)s%(title)s.%(ext)s")
