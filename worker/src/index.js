@@ -35,6 +35,7 @@ async function route(request, env) {
   if (p === '/api/logout' && request.method === 'POST')
     return json({ ok: true }, 200, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
   if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '', url.searchParams.get('type'));
+  if (p === '/api/info' && request.method === 'GET') return linkInfo(url.searchParams.get('url') || '');
   if (p === '/api/jobs' && request.method === 'POST') return startJob(request, env);
   if (p === '/api/jobs' && request.method === 'GET') return listJobs(env);
   let m = p.match(/^\/api\/jobs\/([0-9a-f]{6,16})$/);
@@ -112,6 +113,17 @@ async function search(env, q, type) {
     };
   });
   return json({ items });
+}
+// title + channel + thumbnail for a pasted link, via YouTube's public oEmbed (no key, no quota)
+async function linkInfo(raw) {
+  const m = String(raw).match(/https?:\/\/\S+/i);
+  const u = m ? m[0] : String(raw).trim();
+  if (!YT_URL.test(u)) return json({ error: 'לא קישור של YouTube' }, 400);
+  const r = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(u));
+  if (!r.ok) return json({ error: r.status === 404 ? 'הסרטון לא נמצא או פרטי' : 'לא הצלחתי לקרוא את פרטי הקישור' }, 404);
+  const d = await r.json();
+  return json({ url: u, title: d.title || '', channel: d.author_name || '', thumb: d.thumbnail_url || '',
+    playlist: /youtube\.com\/playlist\?/i.test(u) || /[?&]list=/.test(u) });
 }
 async function searchPlaylists(env, q) {
   const s = await ytApi(env, `search?part=snippet&type=playlist&maxResults=12&q=${encodeURIComponent(q)}`);

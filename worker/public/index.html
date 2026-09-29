@@ -72,6 +72,11 @@ details.paste summary{cursor:pointer;color:var(--muted);font-size:14px;list-styl
 details.paste summary::-webkit-details-marker{display:none}
 details.paste[open] summary{margin-bottom:10px}
 textarea.field{width:100%;min-height:64px;direction:ltr;text-align:left;resize:vertical}
+.preview{display:flex;gap:12px;align-items:center;background:var(--sunk);border-radius:12px;padding:8px;min-width:0}
+.preview img{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;flex:none;max-width:40%}
+.preview .pv{min-width:0;display:flex;flex-direction:column;gap:3px}
+.preview .ttl{-webkit-line-clamp:2}
+.preview.err{color:var(--bad);font-size:13.5px;padding:10px 12px}
 .check{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);cursor:pointer}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
 
@@ -165,6 +170,7 @@ pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-mono
         <summary>או הדבק קישור ישיר ⤵</summary>
         <div class="stack">
           <textarea id="url" class="field" placeholder="https://youtube.com/watch?v=…  או  playlist?list=…" spellcheck="false"></textarea>
+          <div id="preview" class="preview" hidden></div>
           <label class="check" id="plWrap" hidden><input type="checkbox" id="plAll"> להוריד את כל הפלייליסט (עד 50)</label>
           <div class="row">
             <button class="btn soft" style="flex:1" data-paste="video">🎬 וידאו</button>
@@ -228,9 +234,15 @@ function renderShelf(items){const box=$('shelf');
 $('shelf').addEventListener('click',e=>{const b=e.target.closest('button[data-url]');if(b)start(b.dataset.url,b.dataset.fmt,b.dataset.pl,b.dataset.label,b)});
 
 // paste
-$('url').addEventListener('input',()=>{$('plWrap').hidden=!/[?&]list=/.test($('url').value)});
-document.querySelectorAll('button[data-paste]').forEach(b=>b.addEventListener('click',()=>{const u=$('url').value.trim();if(!u){say('הדבק קישור','err');return}
- const pl=/youtube\.com\/playlist\?/i.test(u)||$('plAll').checked?'yes':'no';start(u,b.dataset.paste,pl,u)}));
+let pasted=null,infoTimer=null;
+$('url').addEventListener('input',()=>{const v=$('url').value.trim();$('plWrap').hidden=!/[?&]list=/.test(v)||/youtube\.com\/playlist\?/i.test(v);
+ pasted=null;clearTimeout(infoTimer);if(!v){$('preview').hidden=true;return}infoTimer=setTimeout(()=>loadInfo(v),350)});
+async function loadInfo(v){const box=$('preview');
+ try{const d=await api('/api/info?url='+encodeURIComponent(v));pasted=d;box.className='preview';
+  box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="ch">${esc(d.channel)}${d.playlist?' · פלייליסט':''}</div></div>`;box.hidden=false}
+ catch(e){box.className='preview err';box.textContent=e.message;box.hidden=false}}
+document.querySelectorAll('button[data-paste]').forEach(b=>b.addEventListener('click',()=>{const u=(pasted&&pasted.url)||$('url').value.trim();if(!u){say('הדבק קישור','err');return}
+ const pl=/youtube\.com\/playlist\?/i.test(u)||$('plAll').checked?'yes':'no';start(u,b.dataset.paste,pl,(pasted&&pasted.title)||u)}));
 
 // start a job
 async function start(url,format,playlist,label,btn){if(btn)btn.disabled=true;say('שולח…','info');
