@@ -123,22 +123,8 @@ jobs:
             return 1
           }
           try_routes "${ROUTES[@]}" || true
-          # Israel-only content (the user is in Israel; only the runner is abroad): if YouTube answered with a
-          # country block, bring up Tor with an Israeli exit and retry. Tor starts only here, so normal downloads
-          # don't pay its ~30-60s bootstrap.
-          if [ "$(find out -type f | wc -l)" -eq 0 ] && grep -q "not made this video available in your country" dl.log; then
-            echo "::group::starting Tor with an Israeli exit"
-            sudo apt-get -qq install -y tor >/dev/null
-            # apt starts a system tor on 9050 with no exit restriction - stop it and use our own on 9150
-            sudo systemctl stop tor tor@default 2>/dev/null || true
-            printf 'SocksPort 9150\nExitNodes {il}\nStrictNodes 1\nDataDirectory %s/tordata\nLog notice stdout\n' "$HOME" > "$HOME/torrc"
-            tor -f "$HOME/torrc" > tor.log 2>&1 &
-            for i in $(seq 1 90); do grep -q "Bootstrapped 100%" tor.log && break; sleep 2; done
-            tail -5 tor.log
-            curl -s --max-time 30 --socks5-hostname 127.0.0.1:9150 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(ip|loc)=' | tr '\n' ' '; echo
-            echo "::endgroup::"
-            if grep -q "Bootstrapped 100%" tor.log; then try_routes socks5h://127.0.0.1:9150 || true; else echo "Tor did not bootstrap"; fi
-          fi
+          # Israel-only content: Tor with an Israeli exit was tested (2026-09-30) - it bootstraps and exits from
+          # Israel, but YouTube answers "Video unavailable" to Tor exits. Only a real Israeli proxy (YT_PROXY) works.
           n=$(find out -type f | wc -l)
           if [ "$n" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")
