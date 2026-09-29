@@ -129,12 +129,15 @@ jobs:
           if [ "$(find out -type f | wc -l)" -eq 0 ] && grep -q "not made this video available in your country" dl.log; then
             echo "::group::starting Tor with an Israeli exit"
             sudo apt-get -qq install -y tor >/dev/null
-            printf 'SocksPort 9050\nExitNodes {il}\nStrictNodes 1\nDataDirectory %s/tordata\n' "$HOME" > "$HOME/torrc"
+            # apt starts a system tor on 9050 with no exit restriction - stop it and use our own on 9150
+            sudo systemctl stop tor tor@default 2>/dev/null || true
+            printf 'SocksPort 9150\nExitNodes {il}\nStrictNodes 1\nDataDirectory %s/tordata\nLog notice stdout\n' "$HOME" > "$HOME/torrc"
             tor -f "$HOME/torrc" > tor.log 2>&1 &
-            for i in $(seq 1 60); do grep -q "Bootstrapped 100%" tor.log && break; sleep 2; done
-            curl -s --max-time 20 --socks5-hostname 127.0.0.1:9050 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(ip|loc)=' | tr '\n' ' '; echo
+            for i in $(seq 1 90); do grep -q "Bootstrapped 100%" tor.log && break; sleep 2; done
+            tail -5 tor.log
+            curl -s --max-time 30 --socks5-hostname 127.0.0.1:9150 https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(ip|loc)=' | tr '\n' ' '; echo
             echo "::endgroup::"
-            if grep -q "Bootstrapped 100%" tor.log; then try_routes socks5h://127.0.0.1:9050 || true; else echo "Tor did not bootstrap"; fi
+            if grep -q "Bootstrapped 100%" tor.log; then try_routes socks5h://127.0.0.1:9150 || true; else echo "Tor did not bootstrap"; fi
           fi
           n=$(find out -type f | wc -l)
           if [ "$n" -eq 0 ]; then
