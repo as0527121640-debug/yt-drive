@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YouTube לדרייב</title>
+<meta name="description" content="מחפשים ביוטיוב ושולחים וידאו או MP3 ישר לגוגל דרייב">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0d1220">
+<style>
+/* layout: a search-first single column; results as a thumbnail grid; jobs stacked below */
+:root{
+  --bg:#f6f7f9;--surface:#ffffff;--surface-2:#eef0f4;--text:#141821;--muted:#616a7a;--line:#dce0e8;
+  --accent:#e0503a;--accent-press:#c53f2b;--accent-soft:#fce7e2;--audio:#2f7d6b;--audio-soft:#d9f0ea;
+  --ok:#177245;--ok-soft:#dcf1e3;--bad:#b3261e;--bad-soft:#fbe3e1;--warn:#8a6100;--warn-soft:#fbefcf;
+  --shadow:0 1px 2px rgba(20,24,33,.05),0 6px 20px rgba(20,24,33,.06);color-scheme:light;
+  --disp:"Poppins",system-ui,sans-serif;--body:"Heebo",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0d1220;--surface:#151b2b;--surface-2:#1d2537;--text:#e9edf5;--muted:#96a0b5;--line:#2a3346;
+  --accent:#ff6b52;--accent-press:#ff8570;--accent-soft:#331a15;--audio:#4fc7ac;--audio-soft:#123028;
+  --ok:#4ecb83;--ok-soft:#123021;--bad:#ff6f66;--bad-soft:#341615;--warn:#e0b64d;--warn-soft:#2f2810;
+  --shadow:none;color-scheme:dark;}}
+:root[data-theme=dark]{
+  --bg:#0d1220;--surface:#151b2b;--surface-2:#1d2537;--text:#e9edf5;--muted:#96a0b5;--line:#2a3346;
+  --accent:#ff6b52;--accent-press:#ff8570;--accent-soft:#331a15;--audio:#4fc7ac;--audio-soft:#123028;
+  --ok:#4ecb83;--ok-soft:#123021;--bad:#ff6f66;--bad-soft:#341615;--warn:#e0b64d;--warn-soft:#2f2810;
+  --shadow:none;color-scheme:dark;}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:16px/1.5 var(--body)}
+.wrap{max-width:680px;margin:0 auto;padding-block:20px 48px;padding-inline:16px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+header .logo{width:42px;height:42px;flex:none}
+header h1{font:600 21px/1.1 var(--disp);margin:0;flex:1;letter-spacing:-.01em}
+header small{display:block;font:400 13px/1.4 var(--body);color:var(--muted);margin-top:3px;letter-spacing:0}
+.iconbtn{min-height:38px;padding:7px 12px;font-size:13px;border-radius:10px;background:var(--surface-2);color:var(--text);border:1px solid var(--line);cursor:pointer}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.stack>*+*{margin-top:14px}
+.searchrow{display:flex;gap:8px}
+input[type=search],input[type=password]{flex:1;min-width:0;font:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:600 15px/1 var(--body);border:0;border-radius:12px;padding:0 18px;min-height:48px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.accent{background:var(--accent);color:#fff}.btn.accent:active{background:var(--accent-press)}
+.btn.accent:disabled{opacity:.55;cursor:default}
+.btn.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
+details.paste summary{cursor:pointer;color:var(--muted);font-size:14px;list-style:none}
+details.paste summary::-webkit-details-marker{display:none}
+details.paste[open] summary{margin-bottom:10px}
+textarea{width:100%;font:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px;min-height:64px;direction:ltr;text-align:left;resize:vertical}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:16px}
+.res{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.res .thumb{position:relative;aspect-ratio:16/9;background:var(--surface-2)}
+.res .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.res .dur{position:absolute;bottom:6px;inset-inline-end:6px;background:rgba(0,0,0,.8);color:#fff;font:600 11px/1 var(--body);padding:3px 6px;border-radius:5px;font-variant-numeric:tabular-nums}
+.res .meta{padding:10px 11px 12px;display:flex;flex-direction:column;gap:3px;flex:1}
+.res .ttl{font:600 13.5px/1.35 var(--body);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.res .ch{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res .acts{display:flex;gap:6px;padding:0 11px 11px}
+.res .acts button{flex:1;min-height:38px;border:0;border-radius:9px;font:600 12.5px/1 var(--body);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}
+.b-vid{background:var(--accent-soft);color:var(--accent)}.b-aud{background:var(--audio-soft);color:var(--audio)}
+.b-vid:active,.b-aud:active{filter:brightness(.94)}
+.b-vid[disabled],.b-aud[disabled]{opacity:.5;cursor:default}
+.msg{border-radius:12px;padding:10px 12px;font-size:14px}.msg.err{background:var(--bad-soft);color:var(--bad)}.msg.info{background:var(--accent-soft);color:var(--accent-press)}
+.hint{color:var(--muted);font-size:13px}
+h2{font:600 16px/1 var(--disp);margin:28px 0 12px;display:flex;justify-content:space-between;align-items:center}
+.job{padding:13px 14px}.job+.job{margin-top:10px}
+.job .top{display:flex;gap:10px;align-items:flex-start}
+.job .src{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:left}
+.job .when{color:var(--muted);font-size:12px;margin-top:2px}
+.badge{font:600 12px/1 var(--body);padding:4px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.b-run{background:var(--warn-soft);color:var(--warn)}.b-ok{background:var(--ok-soft);color:var(--ok)}.b-bad{background:var(--bad-soft);color:var(--bad)}.b-wait{background:var(--surface-2);color:var(--muted)}
+.job .step{font-size:13px;color:var(--muted);margin-top:9px}
+.bar{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.job .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.job .actions a{flex:1 1 auto;text-align:center;text-decoration:none;border-radius:10px;padding:10px 12px;font:600 14px/1 var(--body)}
+a.dl{background:var(--accent);color:#fff}a.lnk{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
+pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-monospace,monospace;background:var(--surface-2);border-radius:10px;padding:10px;margin:10px 0 0;max-height:200px;overflow:auto}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:20px}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:24px;line-height:1.7}
+[hidden]{display:none!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="logo" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect width="48" height="48" rx="12" fill="var(--accent)"/>
+      <path d="M20 17l12 7-12 7V17z" fill="#fff"/>
+    </svg>
+    <h1>YouTube לדרייב<small>מחפשים, ושולחים וידאו או MP3 ישר לגוגל דרייב</small></h1>
+    <button id="logout" class="iconbtn" hidden>יציאה</button>
+  </header>
+
+  <section id="loginView" class="card stack" hidden>
+    <label for="pw" class="hint">סיסמה</label>
+    <input id="pw" type="password" autocomplete="current-password" enterkeyhint="go">
+    <button id="loginBtn" class="btn accent" style="width:100%">כניסה</button>
+    <div id="loginMsg" class="msg err" hidden></div>
+  </section>
+
+  <main id="appView" hidden>
+    <section class="card">
+      <form id="searchForm" class="searchrow" autocomplete="off">
+        <input id="q" type="search" placeholder="חיפוש ביוטיוב…" enterkeyhint="search" spellcheck="false">
+        <button class="btn accent" id="searchBtn" type="submit">חפש</button>
+      </form>
+      <details class="paste" style="margin-top:14px">
+        <summary>או הדבק קישור ישיר ⤵</summary>
+        <textarea id="url" placeholder="https://youtube.com/watch?v=…" spellcheck="false"></textarea>
+        <div class="searchrow" style="margin-top:10px">
+          <button class="btn ghost" style="flex:1" data-paste="video">🎬 וידאו</button>
+          <button class="btn ghost" style="flex:1" data-paste="audio">🎵 MP3</button>
+        </div>
+      </details>
+      <div id="msg" class="msg info" hidden style="margin-top:12px"></div>
+      <div id="results" class="results" hidden></div>
+      <div id="searchEmpty" class="empty" hidden></div>
+    </section>
+
+    <h2>ההורדות שלי <button id="refresh" class="iconbtn">רענן</button></h2>
+    <div id="jobs"><div class="empty">טוען…</div></div>
+    <p class="foot">ההורדה רצה בענן ולוקחת דקה־שתיים. אפשר לסגור ולחזור.<br>אם דרייב מחובר — הקובץ נכנס לתיקייה בדרייב; אחרת אפשר להוריד אותו כאן. הקבצים כאן נמחקים אחרי 14 יום.</p>
+  </main>
+</div>
+<script>
+const $=id=>document.getElementById(id);let polling=null,lastJobs=[],canSearch=false;const details={};
+async function api(path,opts={}){const r=await fetch(path,{credentials:'same-origin',...opts});let d={};try{d=await r.json()}catch{}
+ if(r.status===401&&path!=='/api/login'){showLogin();throw new Error(d.error||'צריך להתחבר')}if(!r.ok)throw new Error(d.error||('שגיאה '+r.status));return d}
+function show(el,on){el.hidden=!on}
+function say(t,k='info'){const m=$('msg');m.textContent=t;m.className='msg '+k;m.hidden=!t}
+function showLogin(){show($('loginView'),true);show($('appView'),false);$('logout').hidden=true;stopPoll();setTimeout(()=>$('pw').focus(),50)}
+function showApp(){show($('loginView'),false);show($('appView'),true);$('logout').hidden=false;loadJobs()}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function doLogin(){const b=$('loginBtn');b.disabled=true;$('loginMsg').hidden=true;
+ try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('pw').value})});$('pw').value='';await boot()}
+ catch(e){$('loginMsg').textContent=e.message;$('loginMsg').hidden=false}finally{b.disabled=false}}
+$('loginBtn').onclick=doLogin;$('pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+$('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}showLogin()};
+
+// ---- search ----
+$('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
+ if(!canSearch){say('החיפוש כבוי (אין מפתח YouTube). אפשר להדביק קישור ישיר למטה.','err');return}
+ const b=$('searchBtn');b.disabled=true;b.innerHTML='<span class="spin"></span>';say('');
+ $('results').hidden=true;$('searchEmpty').hidden=true;
+ try{const{items}=await api('/api/search?q='+encodeURIComponent(q));renderResults(items||[])}
+ catch(e){say(e.message,'err')}finally{b.disabled=false;b.textContent='חפש'}});
+function renderResults(items){const box=$('results');
+ if(!items.length){$('searchEmpty').textContent='לא נמצאו תוצאות';$('searchEmpty').hidden=false;box.hidden=true;return}
+ box.innerHTML=items.map(v=>`<div class="res">
+   <div class="thumb">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}${v.duration?`<span class="dur">${esc(v.duration)}</span>`:''}</div>
+   <div class="meta"><div class="ttl">${esc(v.title)}</div><div class="ch">${esc(v.channel)}</div></div>
+   <div class="acts"><button class="b-vid" data-url="${esc(v.url)}" data-fmt="video" data-label="${esc(v.title)}">🎬 וידאו</button>
+   <button class="b-aud" data-url="${esc(v.url)}" data-fmt="audio" data-label="${esc(v.title)}">🎵 MP3</button></div></div>`).join('');
+ box.hidden=false}
+$('results').addEventListener('click',e=>{const btn=e.target.closest('button[data-url]');if(btn)start(btn.dataset.url,btn.dataset.fmt,btn.dataset.label,btn)});
+document.querySelectorAll('button[data-paste]').forEach(b=>b.addEventListener('click',()=>{const u=$('url').value.trim();if(!u){say('הדבק קישור','err');return}start(u,b.dataset.paste,u)}));
+
+// ---- start a job ----
+async function start(url,format,label,btn){if(btn){btn.disabled=true}say('שולח…','info');
+ try{const j=await api('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:url,options:{format}})});
+  remember(j.id,(format==='audio'?'🎵 ':'🎬 ')+(label||url));say('נשלח! מופיע למטה ומתעדכן לבד.','info');await loadJobs()}
+ catch(e){say(e.message,'err')}finally{if(btn)btn.disabled=false}}
+
+// ---- jobs ----
+function labels(){try{return JSON.parse(localStorage.getItem('ytLabels')||'{}')}catch{return{}}}
+function remember(id,label){try{const l=labels();l[id]=label;localStorage.setItem('ytLabels',JSON.stringify(l))}catch{}
+ lastJobs.unshift({id,input:label,status:'pending',created_at:new Date().toISOString()});render(lastJobs);startPoll()}
+function ago(iso){const s=(Date.now()-new Date(iso))/1000;if(s<60)return'עכשיו';if(s<3600)return`לפני ${Math.round(s/60)} דק׳`;if(s<86400)return`לפני ${Math.round(s/3600)} שע׳`;return new Date(iso).toLocaleDateString('he-IL')}
+function badge(j){if(j.status==='pending'||j.status==='queued')return'<span class="badge b-wait"><span class="spin"></span>ממתין</span>';
+ if(j.status!=='completed')return'<span class="badge b-run"><span class="spin"></span>מוריד</span>';
+ if(j.conclusion==='success')return'<span class="badge b-ok">מוכן ✓</span>';if(j.conclusion==='cancelled')return'<span class="badge b-bad">בוטל</span>';return'<span class="badge b-bad">נכשל</span>'}
+const STEP={'Install tools':'מכין כלים','Download':'מוריד מיוטיוב','Deliver':'שולח לדרייב','Publish result':'מסיים','Cleanup old files':'מסיים','Set up job':'מכין שרת'};
+function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div class="card empty">עוד אין הורדות</div>';return}const L=labels();
+ box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const src=L[j.id]||j.input||'';let body='';
+  if(j.status!=='completed'&&d.step){const pct=d.steps_total?Math.round(100*d.steps_done/d.steps_total):0;body+=`<div class="step">${esc(STEP[d.step]||d.step)}</div><div class="bar"><i style="width:${pct}%"></i></div>`}
+  if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));const drive=/Drive/i.test(d.summary||'');
+   body+='<div class="actions">';
+   if(drive)body+='<span class="badge b-ok" style="flex:1;justify-content:center;padding:10px">נשמר בגוגל דרייב ✓</span>';
+   else if(f)body+=`<a class="dl" href="${f.url}">⬇ הורד (${(f.size/1048576).toFixed(1)}MB)</a>`;
+   body+=`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">פרטים</a></div>`;
+   if(j.conclusion!=='success'&&!f)body='<div class="step">נכשל — לרוב סרטון חסום או מוגבל אזור. פתח פרטים לראות למה.</div>'+body;
+   if(d.summary)body+=`<details style="margin-top:8px"><summary class="hint">סיכום</summary><pre class="sum">${esc(d.summary)}</pre></details>`}
+  return `<div class="card job"><div class="top"><div style="flex:1;min-width:0"><div class="src">${esc(src)}</div><div class="when">${ago(j.created_at)}</div></div>${badge(j)}</div>${body}</div>`}).join('')}
+async function loadJobs(){try{const{jobs}=await api('/api/jobs');const known=new Set(jobs.map(j=>j.id));
+  for(const p of lastJobs)if(!known.has(p.id)&&p.status==='pending')jobs.unshift(p);lastJobs=jobs;
+  await Promise.all(jobs.slice(0,8).map(async j=>{if(j.status==='completed'&&details[j.id]&&details[j.id].status==='completed')return;
+   if(j.status==='completed'||j.status==='in_progress'){try{details[j.id]=await api('/api/jobs/'+j.id)}catch{}}}));
+  render(jobs);jobs.some(j=>j.status!=='completed')?startPoll():stopPoll()}
+  catch(e){if(!/להתחבר/.test(e.message))$('jobs').innerHTML=`<div class="card msg err">${esc(e.message)}</div>`}}
+function startPoll(){if(!polling)polling=setInterval(loadJobs,9000)}function stopPoll(){clearInterval(polling);polling=null}
+$('refresh').onclick=loadJobs;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('appView').hidden)loadJobs()});
+
+async function takeShared(){const q=new URLSearchParams(location.search);if(!q.has('share'))return;history.replaceState(null,'','/');
+ if(q.get('share')==='text'){const t=q.get('text')||'';const d=document.querySelector('details.paste');if(d)d.open=true;$('url').value=t}}
+async function boot(){await takeShared();try{const me=await api('/api/me');canSearch=!!me.search;
+  if(!canSearch)$('q').placeholder='חיפוש כבוי — הדבק קישור למטה';showApp()}
+ catch(e){showLogin();if(!/להתחבר/.test(e.message)){$('loginMsg').textContent=e.message;$('loginMsg').hidden=false}}}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+boot();
+</script>
+</body>
+</html>

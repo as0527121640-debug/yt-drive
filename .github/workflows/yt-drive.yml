@@ -1,0 +1,89 @@
+# yt-drive - download a YouTube video/audio with yt-dlp and (if rclone is configured) push it to Google Drive.
+# Triggered by the yt-drive Cloudflare Worker (cloud/yt-drive) or manually from the Actions tab.
+# If secret RCLONE_CONF_BASE64 is set -> the file goes to Drive (folder from var DRIVE_DIR, default "YouTube").
+# Otherwise the file is attached to the job-<id> prerelease so the site can download it.
+name: yt-drive
+run-name: "yt [${{ inputs.job_id }}]: ${{ inputs.input }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      input:
+        description: 'YouTube URL'
+        required: true
+      format:
+        description: 'video (mp4 up to 1080p) or audio (mp3)'
+        type: choice
+        options: [video, audio]
+        default: video
+      job_id:
+        description: 'site job id (empty for manual runs)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      JOB_ID: ${{ inputs.job_id }}
+      INPUT: ${{ inputs.input }}
+      FORMAT: ${{ inputs.format }}
+      RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
+      DRIVE_DIR: ${{ vars.DRIVE_DIR || 'YouTube' }}
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg
+          curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$HOME/.local/bin/yt-dlp" 2>/dev/null \
+            || { sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp; sudo chmod +x /usr/local/bin/yt-dlp; }
+          command -v yt-dlp >/dev/null || { chmod +x "$HOME/.local/bin/yt-dlp"; echo "$HOME/.local/bin" >> "$GITHUB_PATH"; }
+
+      - name: Download
+        run: |
+          mkdir -p out
+          COMMON=(--no-playlist --no-progress --embed-metadata --embed-thumbnail --restrict-filenames -o "out/%(title)s.%(ext)s")
+          if [ "$FORMAT" = "audio" ]; then
+            yt-dlp "${COMMON[@]}" -x --audio-format mp3 --audio-quality 0 "$INPUT"
+          else
+            yt-dlp "${COMMON[@]}" -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*" "$INPUT"
+          fi
+          echo "FILE=$(ls -t out/* | head -1)" >> "$GITHUB_ENV"
+          ls -lh out
+
+      - name: Deliver
+        id: deliver
+        run: |
+          if [ -n "$RCLONE_CONF_BASE64" ]; then
+            curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+            mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
+            rclone copy "$FILE" "gdrive:$DRIVE_DIR" --transfers 2
+            echo "where=Google Drive / $DRIVE_DIR" >> "$GITHUB_OUTPUT"
+            # keep only a small note as the release asset, not the media
+            printf '%s\n' "Uploaded to Google Drive: $(basename "$FILE")" > out/_uploaded.txt
+            find out -type f ! -name '_uploaded.txt' -delete
+          else
+            echo "where=download from the site" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish result
+        if: always() && inputs.job_id != ''
+        run: |
+          notes=$(mktemp)
+          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED - see the run log' }}"; } > "$notes"
+          files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
+          gh release create "job-$JOB_ID" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+            --title "yt $JOB_ID" --notes-file "$notes" "${files[@]}"
+
+      - name: Cleanup old files
+        if: always()
+        continue-on-error: true
+        run: |
+          cutoff=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name|startswith(\"job-\")) | select(.created_at < \"$cutoff\") | .tag_name" |
+          while read -r t; do gh release delete "$t" -R "$GITHUB_REPOSITORY" --cleanup-tag -y; done
