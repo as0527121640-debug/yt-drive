@@ -1,0 +1,11 @@
+# il-relay: keyed fetch relay pinned to Cloudflare Tel Aviv (see src/index.js). Deploy: cd relay ; npx wrangler deploy
+# Secret (same value as the yt-drive repo/worker RELAY_KEY): npx wrangler secret put RELAY_KEY
+name = "il-relay"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+# measured 2026-09-30: azure:israelcentral -> executes in TLV, egresses from an IL IP (Kan returns 200).
+# aws:il-central-1 landed in ZDM and gcp:me-west1 in Mumbai, so azure is the one that reaches Israel.
+[placement]
+region = "azure:israelcentral"

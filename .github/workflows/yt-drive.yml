@@ -48,6 +48,8 @@ jobs:
       RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
       YT_COOKIES: ${{ secrets.YT_COOKIES }}          # optional: Netscape cookies.txt of a (secondary) Google account
       YT_PROXY: ${{ secrets.YT_PROXY }}              # optional: http(s)/socks proxy, e.g. a residential/Israeli one
+      RELAY: ${{ vars.RELAY_URL }}                   # il-relay Worker (runs in Cloudflare Tel Aviv) for Kan streams
+      RELAY_KEY: ${{ secrets.RELAY_KEY }}
       DRIVE_DIR: ${{ vars.DRIVE_DIR || 'YouTube' }}
     # YouTube flags datacenter IPs ("Sign in to confirm you're not a bot"). The open-source answer (yt-dlp, cobalt,
     # Invidious) is a chain: PO token + visitor_data from a BotGuard generator, then alternate player clients, then
@@ -124,9 +126,36 @@ jobs:
             done
             return 1
           }
-          try_routes "${ROUTES[@]}" || true
-          # Israel-only content: Tor with an Israeli exit was tested (2026-09-30) - it bootstraps and exits from
-          # Israel, but YouTube answers "Video unavailable" to Tor exits. Only a real Israeli proxy (YT_PROXY) works.
+          # Kan (Israeli public broadcaster): its HLS is licensed for Israel and the runner is abroad, so pull it
+          # through il-relay, which Cloudflare runs in Tel Aviv. The page HTML itself is reachable from anywhere -
+          # only the CDN streams are geo-gated - so resolve the m3u8 here, then hand the relay-wrapped URL to yt-dlp.
+          case "$INPUT" in
+            *kan.org.il*)
+              echo "::group::Kan via Israeli relay"
+              [ -n "$RELAY" ] && [ -n "$RELAY_KEY" ] || { echo "REASON=Kan relay not configured (RELAY_URL/RELAY_KEY)" >> "$GITHUB_ENV"; echo "::error::relay missing"; exit 1; }
+              UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+              page=$(curl -s -A "$UA" "$INPUT")
+              title=$(printf '%s' "$page" | grep -oE '<meta property="og:title" content="[^"]*"' | head -1 | sed -E 's/.*content="([^"]*)".*/\1/')
+              [ -n "$title" ] || title=$(printf '%s' "$page" | grep -oE '<title>[^<]*' | head -1 | sed 's/<title>//')
+              m3u8=$(printf '%s' "$page" | grep -oE 'https://[a-z0-9.-]*cdn-redge\.media/[^"<> \\]*playlist\.m3u8[^"<> \\]*' | sed 's/&amp;/\&/g' | head -1)
+              [ -n "$m3u8" ] || { echo "REASON=could not find the Kan stream on the page" >> "$GITHUB_ENV"; echo "::error::no m3u8"; exit 1; }
+              enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$m3u8")
+              wrapped="$RELAY/r/playlist.m3u8?k=$RELAY_KEY&u=$enc"
+              safe=$(printf '%s' "$title" | tr -cd '[:alnum:][:space:]._()-' | sed 's/[[:space:]]\+/_/g' | cut -c1-90); [ -n "$safe" ] || safe="kan_$JOB_ID"
+              if [ "$FORMAT" = "audio" ]; then
+                yt-dlp --no-progress --hls-use-mpegts -x --audio-format mp3 --audio-quality 0 -o "out/$safe.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log || true
+              else
+                yt-dlp --no-progress -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "out/$safe.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log || true
+              fi
+              echo "::endgroup::"
+              ;;
+            *)
+              try_routes "${ROUTES[@]}" || true
+              # Israel-only YouTube content: Tor with an Israeli exit was tested (2026-09-30) - it bootstraps and
+              # exits from Israel, but YouTube answers "Video unavailable" to Tor exits. Only YT_PROXY (a real
+              # Israeli proxy) works there.
+              ;;
+          esac
           n=$(find out -type f | wc -l)
           if [ "$n" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")

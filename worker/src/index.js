@@ -13,6 +13,7 @@ const TITLE = /^yt \[([0-9a-f]{6,16})\]: (.*)$/;
 const COOKIE = 'ytd';
 const MONTH = 60 * 60 * 24 * 30;
 const YT_URL = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com\/(watch\?|shorts\/|live\/|playlist\?)|youtu\.be\/)/i;
+const KAN_URL = /^(https?:\/\/)?(www\.)?kan\.org\.il\//i;
 
 export default {
   async fetch(request, env) {
@@ -114,11 +115,19 @@ async function search(env, q, type) {
   });
   return json({ items });
 }
-// title + channel + thumbnail for a pasted link, via YouTube's public oEmbed (no key, no quota)
+// title + channel + thumbnail for a pasted link. YouTube -> public oEmbed; Kan -> the page's Open Graph tags.
 async function linkInfo(raw) {
   const m = String(raw).match(/https?:\/\/\S+/i);
   const u = m ? m[0] : String(raw).trim();
-  if (!YT_URL.test(u)) return json({ error: 'לא קישור של YouTube' }, 400);
+  if (KAN_URL.test(u)) {
+    const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'he-IL,he;q=0.9' } });
+    if (!r.ok) return json({ error: 'לא הצלחתי לקרוא את הדף של כאן' }, 404);
+    const h = await r.text();
+    const og = p => (h.match(new RegExp('<meta property="og:' + p + '" content="([^"]*)"', 'i')) || [])[1] || '';
+    const title = og('title') || (h.match(/<title>([^<]*)/i) || [])[1] || '';
+    return json({ url: u, title: title.trim(), channel: 'כאן 11', thumb: og('image'), playlist: false, kan: true });
+  }
+  if (!YT_URL.test(u)) return json({ error: 'לא קישור של YouTube או כאן' }, 400);
   const r = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(u));
   if (!r.ok) return json({ error: r.status === 404 ? 'הסרטון לא נמצא או פרטי' : 'לא הצלחתי לקרוא את פרטי הקישור' }, 404);
   const d = await r.json();
@@ -171,7 +180,7 @@ async function startJob(request, env) {
   let input = String(b.input || '').trim();
   const m = input.match(/https?:\/\/\S+/i);
   if (m) input = m[0];
-  if (!YT_URL.test(input)) return json({ error: 'צריך קישור של YouTube (או לבחור מתוצאות החיפוש)' }, 400);
+  if (!YT_URL.test(input) && !KAN_URL.test(input)) return json({ error: 'צריך קישור של YouTube או כאן (או לבחור מתוצאות החיפוש)' }, 400);
   if (!/^https?:\/\//i.test(input)) input = 'https://' + input;
   const o = b.options || {};
   const format = o.format === 'audio' ? 'audio' : 'video';
