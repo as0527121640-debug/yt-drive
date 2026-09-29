@@ -12,10 +12,20 @@ on:
         description: 'YouTube URL'
         required: true
       format:
-        description: 'video (mp4 up to 1080p) or audio (mp3)'
+        description: 'video (mp4) or audio (mp3)'
         type: choice
         options: [video, audio]
         default: video
+      quality:
+        description: 'max video quality'
+        type: choice
+        options: [best, "1080", "720", "480"]
+        default: "1080"
+      playlist:
+        description: 'download the whole playlist (up to 50 items)'
+        type: choice
+        options: ["no", "yes"]
+        default: "no"
       job_id:
         description: 'site job id (empty for manual runs)'
         required: false
@@ -33,27 +43,44 @@ jobs:
       JOB_ID: ${{ inputs.job_id }}
       INPUT: ${{ inputs.input }}
       FORMAT: ${{ inputs.format }}
+      QUALITY: ${{ inputs.quality }}
+      PLAYLIST: ${{ inputs.playlist }}
       RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
       DRIVE_DIR: ${{ vars.DRIVE_DIR || 'YouTube' }}
     steps:
       - name: Install tools
         run: |
           sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg
-          curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$HOME/.local/bin/yt-dlp" 2>/dev/null \
-            || { sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp; sudo chmod +x /usr/local/bin/yt-dlp; }
-          command -v yt-dlp >/dev/null || { chmod +x "$HOME/.local/bin/yt-dlp"; echo "$HOME/.local/bin" >> "$GITHUB_PATH"; }
+          # deno: modern yt-dlp needs a JS runtime to solve YouTube's player challenge, or videos come back "unavailable"
+          curl -fsSL https://deno.land/install.sh | sh -s -- -y >/dev/null 2>&1
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+          sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod +x /usr/local/bin/yt-dlp
+          yt-dlp --version
 
       - name: Download
         run: |
           mkdir -p out
-          COMMON=(--no-playlist --no-progress --embed-metadata --embed-thumbnail --restrict-filenames -o "out/%(title)s.%(ext)s")
+          COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors)
+          # whole playlist (capped at 50) vs a single video
+          if [ "$PLAYLIST" = "yes" ]; then
+            COMMON+=(--yes-playlist --playlist-end 50 -o "out/%(playlist_title|)s/%(playlist_index&{} - |)s%(title)s.%(ext)s")
+          else
+            COMMON+=(--no-playlist -o "out/%(title)s.%(ext)s")
+          fi
           if [ "$FORMAT" = "audio" ]; then
             yt-dlp "${COMMON[@]}" -x --audio-format mp3 --audio-quality 0 "$INPUT"
           else
-            yt-dlp "${COMMON[@]}" -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*" "$INPUT"
+            case "$QUALITY" in
+              best) SEL="bv*+ba/b" ;;
+              *)    SEL="bv*[height<=$QUALITY]+ba/b[height<=$QUALITY]" ;;
+            esac
+            yt-dlp "${COMMON[@]}" -f "$SEL" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*" "$INPUT"
           fi
-          echo "FILE=$(ls -t out/* | head -1)" >> "$GITHUB_ENV"
-          ls -lh out
+          n=$(find out -type f | wc -l)
+          [ "$n" -gt 0 ] || { echo "::error::nothing downloaded"; exit 1; }
+          echo "COUNT=$n" >> "$GITHUB_ENV"
+          du -sh out; find out -type f -printf '%P\n'
 
       - name: Deliver
         id: deliver
@@ -61,12 +88,17 @@ jobs:
           if [ -n "$RCLONE_CONF_BASE64" ]; then
             curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
             mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
-            rclone copy "$FILE" "gdrive:$DRIVE_DIR" --transfers 2
-            echo "where=Google Drive / $DRIVE_DIR" >> "$GITHUB_OUTPUT"
-            # keep only a small note as the release asset, not the media
-            printf '%s\n' "Uploaded to Google Drive: $(basename "$FILE")" > out/_uploaded.txt
-            find out -type f ! -name '_uploaded.txt' -delete
+            rclone copy out "gdrive:$DRIVE_DIR" --transfers 2
+            echo "where=Google Drive / $DRIVE_DIR ($COUNT file(s))" >> "$GITHUB_OUTPUT"
+            find out -type f -delete
+            printf '%s\n' "Uploaded $COUNT file(s) to Google Drive / $DRIVE_DIR" > out/_uploaded.txt
           else
+            # download from the site: a single file as-is; several files (playlist) zipped into one archive
+            if [ "$COUNT" -gt 1 ]; then
+              ( cd out && zip -qr ../result.zip . && rm -rf ./* && mv ../result.zip . )
+            else
+              f=$(find out -type f | head -1); [ "$(dirname "$f")" = out ] || { mv "$f" out/; find out -mindepth 1 -type d -empty -delete; }
+            fi
             echo "where=download from the site" >> "$GITHUB_OUTPUT"
           fi
 

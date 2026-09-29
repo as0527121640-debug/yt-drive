@@ -12,7 +12,7 @@
 const TITLE = /^yt \[([0-9a-f]{6,16})\]: (.*)$/;
 const COOKIE = 'ytd';
 const MONTH = 60 * 60 * 24 * 30;
-const YT_URL = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com\/(watch\?|shorts\/|live\/)|youtu\.be\/)/i;
+const YT_URL = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com\/(watch\?|shorts\/|live\/|playlist\?)|youtu\.be\/)/i;
 
 export default {
   async fetch(request, env) {
@@ -34,7 +34,7 @@ async function route(request, env) {
   if (p === '/api/me') return json({ ok: true, search: !!env.YT_API_KEY });
   if (p === '/api/logout' && request.method === 'POST')
     return json({ ok: true }, 200, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
-  if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '');
+  if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '', url.searchParams.get('type'));
   if (p === '/api/jobs' && request.method === 'POST') return startJob(request, env);
   if (p === '/api/jobs' && request.method === 'GET') return listJobs(env);
   let m = p.match(/^\/api\/jobs\/([0-9a-f]{6,16})$/);
@@ -86,10 +86,11 @@ async function ytApi(env, path) {
   }
   return d;
 }
-async function search(env, q) {
+async function search(env, q, type) {
   q = q.trim();
   if (!q) return json({ items: [] });
   if (!env.YT_API_KEY) return json({ error: 'חיפוש כבוי - הגדר YT_API_KEY ב-Worker כדי לחפש (אפשר גם פשוט להדביק קישור)' }, 400);
+  if (type === 'playlist') return searchPlaylists(env, q);
   const s = await ytApi(env, `search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q)}`);
   const ids = (s.items || []).map(i => i.id && i.id.videoId).filter(Boolean);
   const durs = {};
@@ -107,6 +108,31 @@ async function search(env, q) {
       thumb: (th.medium || th.high || th.default || {}).url || '',
       duration: durs[i.id.videoId] || '',
       published: sn.publishedAt || '',
+      kind: 'video',
+    };
+  });
+  return json({ items });
+}
+async function searchPlaylists(env, q) {
+  const s = await ytApi(env, `search?part=snippet&type=playlist&maxResults=12&q=${encodeURIComponent(q)}`);
+  const ids = (s.items || []).map(i => i.id && i.id.playlistId).filter(Boolean);
+  const counts = {};
+  if (ids.length) {
+    const p = await ytApi(env, `playlists?part=contentDetails&id=${ids.join(',')}`);
+    for (const it of p.items || []) counts[it.id] = it.contentDetails && it.contentDetails.itemCount;
+  }
+  const items = (s.items || []).filter(i => i.id && i.id.playlistId).map(i => {
+    const sn = i.snippet || {}, th = sn.thumbnails || {};
+    const n = counts[i.id.playlistId];
+    return {
+      id: i.id.playlistId,
+      url: 'https://www.youtube.com/playlist?list=' + i.id.playlistId,
+      title: sn.title || '',
+      channel: sn.channelTitle || '',
+      thumb: (th.medium || th.high || th.default || {}).url || '',
+      duration: n != null ? `${n} פריטים` : 'פלייליסט',
+      count: n,
+      kind: 'playlist',
     };
   });
   return json({ items });
@@ -135,11 +161,15 @@ async function startJob(request, env) {
   if (m) input = m[0];
   if (!YT_URL.test(input)) return json({ error: 'צריך קישור של YouTube (או לבחור מתוצאות החיפוש)' }, 400);
   if (!/^https?:\/\//i.test(input)) input = 'https://' + input;
-  const format = (b.options && b.options.format) === 'audio' ? 'audio' : 'video';
+  const o = b.options || {};
+  const format = o.format === 'audio' ? 'audio' : 'video';
+  const quality = ['best', '1080', '720', '480'].includes(String(o.quality)) ? String(o.quality) : '1080';
+  // a pure playlist link always means the whole list; a watch?v=..&list=.. link only when asked
+  const playlist = (o.playlist === 'yes' || /youtube\.com\/playlist\?/i.test(input)) ? 'yes' : 'no';
   const id = newId();
   await ghJson(env, `/repos/${env.GH_REPO}/actions/workflows/${env.WORKFLOW}/dispatches`, {
-    method: 'POST', body: JSON.stringify({ ref: env.GH_REF, inputs: { input, format, job_id: id } }) });
-  return json({ id, input, format, created_at: new Date().toISOString() });
+    method: 'POST', body: JSON.stringify({ ref: env.GH_REF, inputs: { input, format, quality, playlist, job_id: id } }) });
+  return json({ id, input, format, quality, playlist, created_at: new Date().toISOString() });
 }
 async function recentRuns(env, n = 40) {
   const d = await ghJson(env, `/repos/${env.GH_REPO}/actions/workflows/${env.WORKFLOW}/runs?per_page=${n}`);
