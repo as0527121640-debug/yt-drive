@@ -11,7 +11,8 @@
    bug that is fixed now); `YouTube/עלומים/01 - ...mp3`, `02 - ...mp3` (season test, before Kan got its own folder);
    `Kan/עלומים - פרק 2 - ילד, חסר לך משהו.mp3`; `YouTube/עלומים - פרק 1 - ...mp3` (early Kan test);
    `13/המעברה, עונה 2, פרק 7 שן תחת שן.mp3` (first 13 test, 2026-09-30); `13/המעברה/01 - ...mp3`, `02 - ...mp3` (13 season
-   test, season 2 episodes 1-2).
+   test, season 2 episodes 1-2). The progress tests (prog0001-0004, 2026-09-30) only re-wrote the 3 TED-Ed mp3 and the
+  13 episode mp3 above - no new files.
 3. **Israel-only YouTube videos** cannot be downloaded for free (see `docs\LESSONS.md`). If it matters: a paid Israeli
    residential proxy as repo secret `YT_PROXY` (already supported, nothing to change in code).
 
@@ -32,6 +33,13 @@
 - The **redesigned page ("TV" look, 2026-09-30) on the live site**: tested locally at phone and desktop width on the real 13 / Kan indexes and episode lists; the downloads drawer and job cards only with example data (the local dev server has no GitHub token). Not tested in the field: the drawer on a real phone with the keyboard open, and the rails with the Kan index (only 13 was clicked through).
 - Failure paths: a playlist with removed / private items (the "some items failed" warning), Kan season with a failing
   episode.
+- **Live progress** (2026-09-30): proved in the cloud on a 13 episode (percent, size, speed, ETA, then "ExtractAudio")
+  and seen on a real Kan video season (43%, 960 MB of 2.18 GB). Not seen live yet: the "item n of m" counter for
+  YouTube playlists (the test run hit YouTube's bot check on every route - unrelated to progress) and the page itself
+  polling a running job (needs the user's password; the parser was unit-tested on the real lines). One 13 run
+  (prog0002) got `HTTP 403 Resource not accessible by integration` on every release call from GITHUB_TOKEN while the
+  runs before and after it, on the same commit, were fine; the re-run passed. If it repeats, suspect GitHub, not the
+  workflow.
 
 ## Ideas (nobody asked yet)
 - Search inside Kan episodes (today the search is by series title only).

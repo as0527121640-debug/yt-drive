@@ -86,3 +86,8 @@ the next site of this kind, is the skill `cloud-job-site` (`references\youtube-t
 - `apt install tor` auto-starts a system tor on 9050 (only relevant if Tor is ever retried; it was dropped).
 - The Worker maps GitHub 401 / 403 / 404-on-`/actions/` to readable Hebrew messages (bad token, missing scope, workflow not
   pushed).
+- **Live progress from a runner:** the runner cannot reach the Worker and the in-progress job log is not readable
+  through the API, so the job's prerelease is the mailbox: created at the start of Download, its notes patched every
+  5 s with yt-dlp's latest `--progress-template` line (~720 calls/h at most, under GITHUB_TOKEN's 1000/h). yt-dlp
+  writes progress to stdout, so the line is picked out of the pipe (`show()`), not from the log, and `--progress-delta`
+  keeps the console quiet. Fast items (a 5 MB mp3) finish between two reports: only the post-processing steps show.
