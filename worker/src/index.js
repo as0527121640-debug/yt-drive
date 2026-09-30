@@ -2,7 +2,8 @@
 // The Worker holds the secrets and does the SEARCH (YouTube Data API). The DOWNLOAD runs in GitHub Actions (yt-dlp).
 //   POST /api/login / GET /api/me / POST /api/logout   - password gate (HMAC cookie)
 //   GET  /api/search?q=...                              - YouTube Data API search.list (+ durations)
-//   GET  /api/kan/search, /api/c13/search, /api/episodes?url= - Kan / Reshet 13 series search and episode lists
+//   GET  /api/kan/search, /api/c13/search, /api/library?source=kan|c13, /api/episodes?url= - Kan / Reshet 13
+//        series search and whole-library browsing (daily indexes in data/), episode lists
 //   POST /api/jobs   {input, options:{format}}          - dispatch yt-drive.yml with the video URL
 //   GET  /api/jobs / GET /api/jobs/:id                  - recent jobs + one job's status/result
 //   GET  /api/files/:assetId                            - download a result file (when Drive is off)
@@ -42,8 +43,9 @@ async function route(request, env) {
     return json({ ok: true }, 200, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
   if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '', url.searchParams.get('type'));
   if (p === '/api/info' && request.method === 'GET') return linkInfo(env, url.searchParams.get('url') || '');
-  if (p === '/api/kan/search' && request.method === 'GET') return kanSearch(env, url.searchParams.get('q') || '');
-  if (p === '/api/c13/search' && request.method === 'GET') return c13Search(url.searchParams.get('q') || '');
+  if (p === '/api/kan/search' && request.method === 'GET') return indexSearch(env, 'kan', url.searchParams.get('q') || '');
+  if (p === '/api/library' && request.method === 'GET') return library(env, url.searchParams.get('source') || '');
+  if (p === '/api/c13/search' && request.method === 'GET') return indexSearch(env, 'c13', url.searchParams.get('q') || '');
   if ((p === '/api/episodes' || p === '/api/kan/episodes') && request.method === 'GET') {
     const u = url.searchParams.get('url') || '';
     return C13_URL.test(u) ? c13Episodes(u) : kanEpisodes(u);
@@ -142,29 +144,45 @@ function normKanUrl(raw) {        // https, no query/hash, trailing slash (the s
     return x.href;
   } catch { return raw; }
 }
-let kanIdx = null, kanIdxAt = 0;
-async function kanIndex(env) {
-  if (kanIdx && Date.now() - kanIdxAt < 30 * 60 * 1000) return kanIdx;
-  const r = await fetch(`https://raw.githubusercontent.com/${env.GH_REPO}/${env.GH_REF}/data/kan-index.json`,
+// The daily catalogue indexes (data/*.json, built by the kan-index workflow), cached per isolate for 30 minutes.
+// Kan: section s (kan-11 / kan-actual ...). 13: genres g, catalogue date d, full-episode count n.
+const KAN_SECTIONS = { 'kan-11': 'כאן 11', 'kan-actual': 'אקטואליה' };
+const indexes = {};
+async function loadIndex(env, source) {
+  const c = indexes[source];
+  if (c && Date.now() - c.at < 30 * 60 * 1000) return c.items;
+  const file = source === 'c13' ? 'c13-index.json' : 'kan-index.json';
+  const r = await fetch(`https://raw.githubusercontent.com/${env.GH_REPO}/${env.GH_REF}/data/${file}`,
     { cf: { cacheTtl: 600, cacheEverything: true } });
-  if (!r.ok) throw new Error('אינדקס הסדרות של כאן עוד לא נוצר (הוא מתעדכן פעם ביום)');
+  if (!r.ok) throw new Error('אינדקס הסדרות עוד לא נוצר (הוא מתעדכן פעם ביום)');
   const d = await r.json();
-  kanIdx = (d.items || []).map(x => ({ title: x.t, url: x.u, thumb: x.i, n: normHe(x.t) }));
-  kanIdxAt = Date.now();
-  return kanIdx;
+  const items = (d.items || []).map(x => source === 'c13'
+    ? { title: x.t, url: x.u, thumb: x.i, groups: x.g || [], count: x.n || 0, n: normHe(x.t) }
+    : { title: x.t, url: x.u, thumb: x.i, groups: [KAN_SECTIONS[x.s] || 'עוד'], n: normHe(x.t) });
+  indexes[source] = { at: Date.now(), items, updated: d.updated || '' };
+  return items;
 }
-async function kanSearch(env, q) {
+// all words must match; starts with the first word, then a word that starts with it, then anywhere; shorter first
+async function indexSearch(env, source, q) {
   const words = normHe(q).split(' ').filter(Boolean);
   if (!words.length) return json({ items: [] });
   const hits = [];
-  for (const it of await kanIndex(env)) {
+  for (const it of await loadIndex(env, source)) {
     if (!words.every(w => it.n.includes(w))) continue;
-    // starts with the first word, then a word that starts with it, then anywhere; shorter titles first
     const rank = it.n.startsWith(words[0]) ? 0 : it.n.includes(' ' + words[0]) ? 1 : 2;
     hits.push({ it, score: rank * 1000 + it.title.length });
   }
   hits.sort((a, b) => a.score - b.score);
-  return json({ items: hits.slice(0, 30).map(({ it }) => ({ url: it.url, title: it.title, channel: 'כאן', thumb: it.thumb, kind: 'kan' })) });
+  return json({ items: hits.slice(0, 30).map(({ it }) => ({ url: it.url, title: it.title, channel: source === 'c13' ? '13' : 'כאן',
+    thumb: it.thumb, kind: source === 'c13' ? 'series' : 'kan' })) });
+}
+// the whole library of one channel, for browsing: the page filters, groups and sorts it itself
+async function library(env, source) {
+  if (source !== 'kan' && source !== 'c13') return json({ error: 'מקור לא מוכר' }, 400);
+  const items = await loadIndex(env, source);
+  return json({ source, updated: indexes[source].updated,
+    items: items.map(({ title, url, thumb, groups, count }) => ({ title, url, thumb, groups, count })) },
+    200, { 'Cache-Control': 'private, max-age=600' });
 }
 async function kanPage(u) {
   const r = await fetch(u, { headers: { 'User-Agent': KAN_UA, 'Accept-Language': 'he-IL,he;q=0.9' } });
@@ -271,13 +289,6 @@ function ottImage(o, ratio, w, h) {
 }
 const secsClock = n => { n = Math.round(+n || 0); return n > 0 ? iso8601ToClock(`PT${Math.floor(n / 3600)}H${Math.floor(n / 60) % 60}M${n % 60}S`) : ''; };
 const kq = s => String(s).replace(/['\\]/g, ' ').trim();      // a value inside KSQL quotes
-async function c13Search(q) {
-  q = kq(q);
-  if (!q) return json({ items: [] });
-  const { items } = await ottList(`(and name~'${q}' asset_type='${C13_SERIES}')`, { n: 30, props: 'id,name,metas,images' });
-  return json({ items: items.filter(o => ottMeta(o, 'SeriesID')).map(o => ({
-    url: c13Url({ sid: ottMeta(o, 'SeriesID') }), title: o.name || '', channel: '13', thumb: ottImage(o, '2x3', 240, 360), kind: 'series' })) });
-}
 async function c13SeriesAsset(sid) {
   const { items } = await ottList(`(and SeriesID='${kq(sid)}' asset_type='${C13_SERIES}')`, { n: 1, props: 'id,name,images' });
   return items[0] || null;

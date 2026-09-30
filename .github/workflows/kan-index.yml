@@ -1,4 +1,5 @@
-# kan-index - refresh data/kan-index.json (every series on Kan's VOD lobby pages) once a day.
+# kan-index - refresh the catalogue indexes once a day: data/kan-index.json (every series on Kan's VOD lobby pages)
+# and data/c13-index.json (every Reshet 13 series with full episodes, from its Kaltura OTT catalogue).
 # The site's Worker searches this small file (it fetches it from raw.githubusercontent.com), because Kan's own search
 # is a third-party widget without a usable API. Manual run: Actions tab -> kan-index -> Run workflow.
 name: kan-index
@@ -18,17 +19,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build the index
+      - name: Build the Kan index
+        continue-on-error: true               # one channel failing must not block the other's refresh
         env:
           RELAY_URL: ${{ vars.RELAY_URL }}      # fallback if Kan challenges this network
           RELAY_KEY: ${{ secrets.RELAY_KEY }}
         run: python3 scripts/build_kan_index.py
 
+      - name: Build the 13 index
+        continue-on-error: true
+        run: python3 scripts/build_c13_index.py
+
       - name: Commit if changed
         run: |
-          if [ -z "$(git status --porcelain data/kan-index.json)" ]; then echo "index unchanged"; exit 0; fi
+          if [ -z "$(git status --porcelain data/)" ]; then echo "indexes unchanged"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/kan-index.json
+          git add data/kan-index.json data/c13-index.json
           git commit -m "kan-index: refresh $(date -u +%F)"
           git push

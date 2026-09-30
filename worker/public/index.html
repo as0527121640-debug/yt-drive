@@ -134,6 +134,13 @@ svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .chip svg.i{width:16px;height:16px}
 @media (max-width:520px){.row{grid-template-columns:128px 1fr;gap:12px;padding:8px}.ttl{font-size:14px}.acts .chip{padding:0 10px}}
 
+/* library of a channel: header, group chips, poster grid */
+.lib{display:flex;flex-direction:column;gap:12px}
+.lib-head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.lib-head h2{font:700 34px/.9 var(--display);margin:0;flex:1;min-width:0}
+.lib-head h2 small{display:block;font:500 13px/1.4 var(--body);color:var(--muted);margin-top:6px}
+.seasons button .c{font:500 11.5px/1 var(--mono);opacity:.7;margin-inline-start:5px}
+.poster-card .sub{font-size:12px}
 /* Kan: series posters */
 .posters{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:16px 12px}
 .poster-card{border:0;background:none;padding:0;text-align:start;display:flex;flex-direction:column;gap:8px}
@@ -260,6 +267,16 @@ details.sum pre{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5
       <div id="msg" class="msg info" hidden></div>
     </section>
 
+    <section id="lib" class="lib" hidden>
+      <div class="lib-head"><h2 id="libTitle"></h2>
+        <label class="opt" for="libSort">סדר
+          <select id="libSort"><option value="site">כמו באתר</option><option value="az">א–ת</option></select>
+        </label>
+      </div>
+      <div id="libChips" class="seasons" role="group" aria-label="סינון לפי סוג" hidden></div>
+      <div id="libGrid" class="posters"></div>
+      <div id="libEmpty" class="empty" hidden></div>
+    </section>
     <section id="shelf" class="results" hidden></section>
     <section id="kanView" class="kview" hidden>
       <div class="khead">
@@ -299,9 +316,10 @@ const isLink=v=>/https?:\/\/|(^|\s)(www\.|m\.)?(youtube\.com|youtu\.be|kan\.org\
 // tabs + options
 function paint(){document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.type===searchType));
  $('qualSel').value=quality;$('maxSel').value=String(maxItems);
- $('q').placeholder=searchType==='kan'?'סדרה בכאן, או קישור':searchType==='c13'?'סדרה ב-13, או קישור':(!canSearch?'הדבקת קישור של יוטיוב או כאן':(searchType==='playlist'?'פלייליסט, או קישור':'סרטון, או קישור'))}
+ $('q').placeholder=searchType==='kan'?'סינון סדרות בכאן, או קישור':searchType==='c13'?'סינון סדרות ב-13, או קישור':(!canSearch?'הדבקת קישור של יוטיוב או כאן':(searchType==='playlist'?'פלייליסט, או קישור':'סרטון, או קישור'))}
 $('typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;searchType=b.dataset.type;store.set('ytType',searchType);paint();
- const v=$('q').value.trim();if(v&&!isLink(v))$('searchForm').requestSubmit()});
+ const v=$('q').value.trim();if(isLib()){showLibrary();return}$('lib').hidden=true;$('kanView').hidden=true;
+ if(v&&!isLink(v))$('searchForm').requestSubmit();else $('shelf').hidden=$('shelf').innerHTML===''||$('shelf').className==='posters'});
 $('qualSel').addEventListener('change',()=>{quality=$('qualSel').value;store.set('ytQuality',quality)});
 $('maxSel').addEventListener('change',()=>{maxItems=parseInt($('maxSel').value,10)||50;store.set('ytMax',String(maxItems));if(pasted)showPreview(pasted);if(kanState)renderKan(kanState)});
 
@@ -315,9 +333,11 @@ $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch
 // one field: a search, or a pasted link (then a preview card with the download buttons)
 let pasted=null,infoTimer=null;
 $('q').addEventListener('input',()=>{const v=$('q').value.trim();$('clearQ').hidden=!v;clearTimeout(infoTimer);
- if(isLink(v)){pasted=null;infoTimer=setTimeout(()=>loadInfo(v),300)}else{pasted=null;$('preview').hidden=true}});
-$('clearQ').addEventListener('click',()=>{$('q').value='';$('clearQ').hidden=true;pasted=null;$('preview').hidden=true;say('');$('q').focus()});
-$('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
+ if(isLink(v)){pasted=null;infoTimer=setTimeout(()=>loadInfo(v),300)}else{pasted=null;$('preview').hidden=true;if(isLib())showLibrary()}});
+$('clearQ').addEventListener('click',()=>{$('q').value='';$('clearQ').hidden=true;pasted=null;$('preview').hidden=true;say('');if(isLib())showLibrary();$('q').focus()});
+$('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('q').value.trim();
+ if(isLib()&&!isLink(q)){showLibrary();$('q').blur();return}
+ if(!q)return;
  if(isLink(q)){clearTimeout(infoTimer);loadInfo(q);return}
  if(searchType!=='kan'&&searchType!=='c13'&&!canSearch){say('החיפוש ביוטיוב כבוי כרגע. אפשר להדביק קישור ישיר.','err');return}
  const b=$('searchBtn');b.disabled=true;b.innerHTML='<span class="spin"></span>';say('');$('shelf').hidden=true;$('kanView').hidden=true;$('searchEmpty').hidden=true;$('preview').hidden=true;
@@ -343,10 +363,41 @@ function renderShelf(items){const box=$('shelf');
 $('shelf').addEventListener('click',e=>{const k=e.target.closest('[data-kan]');if(k){openKan(k.dataset.kan,k.dataset.title);return}
  const b=e.target.closest('button[data-url]');if(b)start(b.dataset.url,b.dataset.fmt,b.dataset.pl,b.dataset.label,b)});
 
-// Kan: episodes of a series / season
+// the whole library of Kan / 13 (daily indexes): filtered live by the field, grouped by chips, sorted
+const isLib=()=>searchType==='kan'||searchType==='c13';
+const LIBNAME={kan:'כאן',c13:'13'};
+const normHe=s=>String(s||'').normalize('NFKD').replace(/[\u0591-\u05C7]/g,'').toLowerCase().replace(/["'׳״`.,:;!?()\-–_/\\]/g,' ').replace(/\s+/g,' ').trim();
+const lib={};let libGroup='',libSort=store.get('libSort','site');
+async function showLibrary(){const src=searchType;$('shelf').hidden=true;$('searchEmpty').hidden=true;$('kanView').hidden=true;$('lib').hidden=false;
+ if(!lib[src]){$('libTitle').textContent='הספרייה של '+LIBNAME[src];$('libChips').hidden=true;$('libEmpty').hidden=true;$('libGrid').innerHTML='<div class="empty">טוען את הספרייה…</div>';
+  try{const d=await api('/api/library?source='+src);d.items.forEach((x,i)=>{x.n=normHe(x.title);x.i=i});lib[src]=d}
+  catch(e){$('libGrid').innerHTML=`<div class="msg err">${esc(e.message)}</div>`;return}
+  if(searchType!==src)return}
+ renderLib()}
+function renderLib(){const src=searchType,d=lib[src];if(!d)return;
+ const v=$('q').value.trim(),words=isLink(v)?[]:normHe(v).split(' ').filter(Boolean);
+ const hit=d.items.filter(x=>words.every(w=>x.n.includes(w)));
+ const groups={};hit.forEach(x=>(x.groups||[]).forEach(g=>groups[g]=(groups[g]||0)+1));
+ const gl=Object.entries(groups).sort((a,b)=>b[1]-a[1]);if(libGroup&&!groups[libGroup])libGroup='';
+ $('libChips').hidden=gl.length<2;
+ $('libChips').innerHTML=`<button type="button" data-g="" aria-pressed="${!libGroup}">הכל<span class="c">${hit.length}</span></button>`+
+  gl.map(([g,n])=>`<button type="button" data-g="${esc(g)}" aria-pressed="${g===libGroup}">${esc(g)}<span class="c">${n}</span></button>`).join('');
+ const shown=libGroup?hit.filter(x=>(x.groups||[]).includes(libGroup)):hit.slice();
+ if(libSort==='az')shown.sort((a,b)=>a.title.localeCompare(b.title,'he'));else shown.sort((a,b)=>a.i-b.i);
+ $('libSort').value=libSort;
+ const upd=d.updated?` · עודכן ${new Date(d.updated).toLocaleDateString('he-IL')}`:'';
+ $('libTitle').innerHTML=`הספרייה של ${LIBNAME[src]}<small>${words.length||libGroup?`${shown.length} מתוך ${d.items.length} סדרות`:`${d.items.length} סדרות`}${esc(upd)}</small>`;
+ $('libEmpty').hidden=!!shown.length;$('libEmpty').textContent='אין סדרה בשם הזה. נסה מילה אחרת.';
+ $('libGrid').innerHTML=shown.map(x=>`<button type="button" class="poster-card" data-kan="${esc(x.url)}" data-title="${esc(x.title)}">
+  <div class="art">${x.thumb?`<img loading="lazy" src="${esc(x.thumb)}" alt="">`:''}</div><div class="ttl">${esc(x.title)}</div>${x.count?`<div class="sub">${x.count} פרקים</div>`:''}</button>`).join('')}
+$('libChips').addEventListener('click',e=>{const b=e.target.closest('button[data-g]');if(!b)return;libGroup=b.dataset.g;renderLib()});
+$('libSort').addEventListener('change',()=>{libSort=$('libSort').value;store.set('libSort',libSort);renderLib()});
+$('libGrid').addEventListener('click',e=>{const k=e.target.closest('[data-kan]');if(k)openKan(k.dataset.kan,k.dataset.title)});
+
+// Kan / 13: episodes of a series / season
 let kanState=null;
 async function openKan(url,title){
- $('shelf').hidden=true;$('searchEmpty').hidden=true;$('kanView').hidden=false;$('kanTitle').textContent=title||'';
+ $('shelf').hidden=true;$('lib').hidden=true;$('searchEmpty').hidden=true;$('kanView').hidden=false;$('kanTitle').textContent=title||'';
  $('kanSeasons').hidden=true;$('kanAll').hidden=true;$('kanNote').hidden=true;$('kanEps').innerHTML='<li class="empty">טוען פרקים…</li>';
  $('kanView').scrollIntoView({behavior:'smooth',block:'start'});
  try{kanState=await api('/api/episodes?url='+encodeURIComponent(url));renderKan(kanState,title)}
@@ -364,7 +415,7 @@ function renderKan(d,fallbackTitle){
    ${e.thumb?`<img loading="lazy" src="${esc(e.thumb)}" alt="">`:'<span class="ph"></span>'}
    <div class="info"><div class="ttl">${esc(e.title)}</div><div class="sub">${esc(e.duration)}</div></div>
    <div class="acts"><button class="chip go-v" data-ep="${i}" data-fmt="video" aria-label="וידאו" title="וידאו">${ico('video')}<span class="lbl">וידאו</span></button><button class="chip go-a" data-ep="${i}" data-fmt="audio" aria-label="MP3" title="MP3">${ico('audio')}<span class="lbl">MP3</span></button></div></li>`).join(''):'<li class="empty">לא נמצאו פרקים בעונה הזו</li>'}
-$('kanBack').addEventListener('click',()=>{$('kanView').hidden=true;$('shelf').hidden=$('shelf').innerHTML==='';});
+$('kanBack').addEventListener('click',()=>{$('kanView').hidden=true;if(isLib()){$('lib').hidden=false;$('lib').scrollIntoView({block:'start'})}else $('shelf').hidden=$('shelf').innerHTML==='';});
 $('kanSeasons').addEventListener('click',async e=>{const b=e.target.closest('button[data-season]');if(!b)return;
  const keep=kanState&&kanState.title;$('kanEps').innerHTML='<li class="empty">טוען פרקים…</li>';
  try{const d=await api('/api/episodes?url='+encodeURIComponent(b.dataset.season));d.title=keep||d.title;kanState=d;renderKan(d)}
@@ -468,7 +519,7 @@ $('refresh').onclick=loadJobs;document.addEventListener('visibilitychange',()=>{
 
 async function takeShared(){const q=new URLSearchParams(location.search);if(!q.has('share'))return;history.replaceState(null,'','/');
  if(q.get('share')==='text'){const t=q.get('text')||'';const m=t.match(/https?:\/\/\S+/);$('q').value=m?m[0]:t;$('q').dispatchEvent(new Event('input'))}}
-async function boot(){await takeShared();try{const me=await api('/api/me');canSearch=!!me.search;paint();showApp()}
+async function boot(){await takeShared();try{const me=await api('/api/me');canSearch=!!me.search;paint();showApp();if(isLib())showLibrary()}
  catch(e){showLogin();if(!/להתחבר/.test(e.message)){$('loginMsg').textContent=e.message;$('loginMsg').hidden=false}}}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 paint();boot();
