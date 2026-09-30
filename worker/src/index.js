@@ -14,6 +14,9 @@ const COOKIE = 'ytd';
 const MONTH = 60 * 60 * 24 * 30;
 const YT_URL = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com\/(watch\?|shorts\/|live\/|playlist\?)|youtu\.be\/)/i;
 const KAN_URL = /^(https?:\/\/)?(www\.)?kan\.org\.il\//i;
+const KAN_SERIES = /^https:\/\/www\.kan\.org\.il\/content\/kan\/[^/]+\/p-\d+\/$/;          // a whole series
+const KAN_SEASON = /^https:\/\/www\.kan\.org\.il\/content\/kan\/[^/]+\/p-\d+\/s\d+\/$/;   // one season of it
+const KAN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 export default {
   async fetch(request, env) {
@@ -37,6 +40,8 @@ async function route(request, env) {
     return json({ ok: true }, 200, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
   if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '', url.searchParams.get('type'));
   if (p === '/api/info' && request.method === 'GET') return linkInfo(env, url.searchParams.get('url') || '');
+  if (p === '/api/kan/search' && request.method === 'GET') return kanSearch(env, url.searchParams.get('q') || '');
+  if (p === '/api/kan/episodes' && request.method === 'GET') return kanEpisodes(url.searchParams.get('url') || '');
   if (p === '/api/jobs' && request.method === 'POST') return startJob(request, env);
   if (p === '/api/jobs' && request.method === 'GET') return listJobs(env);
   let m = p.match(/^\/api\/jobs\/([0-9a-f]{6,16})$/);
@@ -115,6 +120,101 @@ async function search(env, q, type) {
   });
   return json({ items });
 }
+// ---- Kan (kan.org.il): search over the daily series index, and episode lists parsed from the site's own pages ----
+// Kan's site search is a third-party widget with no usable API, so data/kan-index.json (built daily by the kan-index
+// workflow from the VOD lobby pages) is searched here. Episode lists come from the series / season pages (plain HTML).
+const decodeHtml = s => String(s || '')
+  .replace(/&quot;/g, '"').replace(/&#39;|&#x27;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');
+// Hebrew-friendly matching: no niqqud, no punctuation, lower-case Latin
+const normHe = s => String(s || '').normalize('NFKD').replace(/[֑-ׇ]/g, '').toLowerCase()
+  .replace(/["'׳״`.,:;!?()\-–_/\\]/g, ' ').replace(/\s+/g, ' ').trim();
+function normKanUrl(raw) {        // https, no query/hash, trailing slash (the shape KAN_SERIES / KAN_SEASON expect)
+  try {
+    const x = new URL(/^https?:/i.test(raw) ? raw : 'https://' + raw);
+    x.hash = ''; x.search = ''; if (!x.pathname.endsWith('/')) x.pathname += '/';
+    return x.href;
+  } catch { return raw; }
+}
+let kanIdx = null, kanIdxAt = 0;
+async function kanIndex(env) {
+  if (kanIdx && Date.now() - kanIdxAt < 30 * 60 * 1000) return kanIdx;
+  const r = await fetch(`https://raw.githubusercontent.com/${env.GH_REPO}/${env.GH_REF}/data/kan-index.json`,
+    { cf: { cacheTtl: 600, cacheEverything: true } });
+  if (!r.ok) throw new Error('אינדקס הסדרות של כאן עוד לא נוצר (הוא מתעדכן פעם ביום)');
+  const d = await r.json();
+  kanIdx = (d.items || []).map(x => ({ title: x.t, url: x.u, thumb: x.i, n: normHe(x.t) }));
+  kanIdxAt = Date.now();
+  return kanIdx;
+}
+async function kanSearch(env, q) {
+  const words = normHe(q).split(' ').filter(Boolean);
+  if (!words.length) return json({ items: [] });
+  const hits = [];
+  for (const it of await kanIndex(env)) {
+    if (!words.every(w => it.n.includes(w))) continue;
+    // starts with the first word, then a word that starts with it, then anywhere; shorter titles first
+    const rank = it.n.startsWith(words[0]) ? 0 : it.n.includes(' ' + words[0]) ? 1 : 2;
+    hits.push({ it, score: rank * 1000 + it.title.length });
+  }
+  hits.sort((a, b) => a.score - b.score);
+  return json({ items: hits.slice(0, 30).map(({ it }) => ({ url: it.url, title: it.title, channel: 'כאן', thumb: it.thumb, kind: 'kan' })) });
+}
+async function kanPage(u) {
+  const r = await fetch(u, { headers: { 'User-Agent': KAN_UA, 'Accept-Language': 'he-IL,he;q=0.9' } });
+  if (!r.ok) throw new Error(`לא הצלחתי לקרוא את הדף של כאן (${r.status})`);
+  return r.text();
+}
+// Kan's markup puts newlines and indentation between attributes, so every pattern below uses \s+ between them.
+function kanProgram(h) {          // the program's real name, without the "- season N | full episodes" style suffixes
+  // season pages carry an EMPTY npawData.program, so take the first candidate that is non-empty
+  for (const re of [/npawData\.program\s*=\s*decodeEntities\('([^']*)'\)/, /<meta\s+property="og:title"\s+content="([^"]*)"/, /<title>\s*([^<]*)/]) {
+    const m = h.match(re);
+    const t = m ? decodeHtml(m[1]).replace(/\s*[-|]?\s*(פרקים מלאים.*|עונה \d+.*)$/, '').trim() : '';
+    if (t) return t;
+  }
+  return '';
+}
+function kanEpisodesOf(h) {
+  const out = [], seen = new Set();
+  const re = /<a\s+href="(https:\/\/www\.kan\.org\.il\/content\/kan\/[^"]+\/p-\d+\/s\d+\/\d+\/)"\s+class="card card-row[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(h))) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    const inner = m[2];
+    const img = (inner.match(/<img\s+src="([^"]+)"/) || [])[1] || '';
+    out.push({
+      url: m[1],
+      title: decodeHtml((inner.match(/<h3 class="card-title">\s*([^<]*?)\s*<\/h3>/) || [])[1] || '').trim(),
+      duration: ((inner.match(/<span class="duration">\s*([^<]+?)\s*<\/span>/) || [])[1] || '').trim(),
+      thumb: img ? new URL(decodeHtml(img), 'https://www.kan.org.il').href : '',
+    });
+  }
+  return out;
+}
+function kanSeasonsOf(h) {
+  const seen = new Map();
+  const re = /<a\s+class="dropdown-item"\s+href="(https:\/\/www\.kan\.org\.il\/content\/kan\/[^"]+\/p-\d+\/s(\d+)\/)"[^>]*>\s*([^<]*?)\s*</g;
+  let m;
+  while ((m = re.exec(h))) seen.set(m[1], { n: +m[2], label: decodeHtml(m[3]).trim() || `עונה ${m[2]}`, url: m[1] });
+  return [...seen.values()].sort((a, b) => a.n - b.n);
+}
+// the episodes of a series (its first season, with the season list to switch) or of one season
+async function kanEpisodes(raw) {
+  const u = normKanUrl(String(raw).trim());
+  if (!KAN_SERIES.test(u) && !KAN_SEASON.test(u)) return json({ error: 'זה לא קישור של סדרה או עונה בכאן' }, 400);
+  let page = await kanPage(u);
+  const title = kanProgram(page);
+  const seasons = kanSeasonsOf(page);
+  let season = KAN_SEASON.test(u) ? u : '';
+  if (!season) {
+    if (seasons.length) { season = seasons[0].url; page = await kanPage(season); }
+    else if (!kanEpisodesOf(page).length) { season = u + 's1/'; page = await kanPage(season); }
+  }
+  return json({ url: u, title, seasons, season, episodes: kanEpisodesOf(page).slice(0, 200) });
+}
+
 // A playlist's title / channel / thumbnail / item count from the YouTube Data API (1 quota unit). Null when there
 // is no key, no such list (auto-generated mixes such as list=RD... are not in the API), or the quota is spent.
 async function playlistMeta(env, listId) {
@@ -136,12 +236,13 @@ async function linkInfo(env, raw) {
   const m = String(raw).match(/https?:\/\/\S+/i);
   const u = m ? m[0] : String(raw).trim();
   if (KAN_URL.test(u)) {
-    const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'he-IL,he;q=0.9' } });
-    if (!r.ok) return json({ error: 'לא הצלחתי לקרוא את הדף של כאן' }, 404);
-    const h = await r.text();
-    const og = p => (h.match(new RegExp('<meta property="og:' + p + '" content="([^"]*)"', 'i')) || [])[1] || '';
-    const title = og('title') || (h.match(/<title>([^<]*)/i) || [])[1] || '';
-    return json({ url: u, title: title.trim(), channel: 'כאן 11', thumb: og('image'), playlist: false, kan: true });
+    const ku = normKanUrl(u);
+    const kind = KAN_SEASON.test(ku) ? 'season' : KAN_SERIES.test(ku) ? 'series' : 'episode';
+    const h = await kanPage(ku);
+    const og = p => decodeHtml((h.match(new RegExp('<meta\\s+property="og:' + p + '"\\s+content="([^"]*)"', 'i')) || [])[1] || '');
+    // a series / season page is described by the program's name, an episode page by its own title
+    const title = kind === 'episode' ? (og('title') || decodeHtml((h.match(/<title>([^<]*)/i) || [])[1] || '')) : kanProgram(h);
+    return json({ url: ku, title: title.trim(), channel: 'כאן 11', thumb: og('image'), playlist: kind !== 'episode', kan: true, kanKind: kind });
   }
   if (!YT_URL.test(u)) return json({ error: 'לא קישור של YouTube או כאן' }, 400);
   const listId = listIdOf(u);
@@ -204,13 +305,14 @@ async function startJob(request, env) {
   let input = String(b.input || '').trim();
   const m = input.match(/https?:\/\/\S+/i);
   if (m) input = m[0];
+  if (KAN_URL.test(input)) input = normKanUrl(input);     // the workflow tells episode / season / series apart by the URL
   if (!YT_URL.test(input) && !KAN_URL.test(input)) return json({ error: 'צריך קישור של YouTube או כאן (או לבחור מתוצאות החיפוש)' }, 400);
   if (!/^https?:\/\//i.test(input)) input = 'https://' + input;
   const o = b.options || {};
   const format = o.format === 'audio' ? 'audio' : 'video';
   const quality = ['best', '1080', '720', '480'].includes(String(o.quality)) ? String(o.quality) : '1080';
   // a pure playlist link always means the whole list; a watch?v=..&list=.. link only when asked
-  const playlist = (o.playlist === 'yes' || /youtube\.com\/playlist\?/i.test(input)) ? 'yes' : 'no';
+  const playlist = (o.playlist === 'yes' || /youtube\.com\/playlist\?/i.test(input) || KAN_SERIES.test(input) || KAN_SEASON.test(input)) ? 'yes' : 'no';
   // how many playlist items from the start: 1..100, default 50 (Kan / single videos ignore it)
   const maxItems = String(Math.min(100, Math.max(1, parseInt(o.max_items, 10) || 50)));
   const id = newId();

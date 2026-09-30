@@ -103,8 +103,10 @@ jobs:
           import html, json, re, sys
           h = sys.stdin.read()
           name = ""
+          if len(sys.argv) > 1 and sys.argv[1] == "--plain":
+              name = h.strip()                   # plain text (e.g. a series name): only sanitize it
           # 1) the page's VideoObject in JSON-LD carries the full title: "series | episode - subtitle"
-          for blk in re.findall(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', h, re.S):
+          for blk in ([] if name else re.findall(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', h, re.S)):
               try:
                   data = json.loads(blk)
               except ValueError:
@@ -120,7 +122,7 @@ jobs:
                       stack.extend(o.values())
           # 2) fall back to og:title, then <title>
           if not name:
-              for pat in (r'<meta property="og:title" content="([^"]*)"', r"<title>([^<]*)"):
+              for pat in (r'<meta\s+property="og:title"\s+content="([^"]*)"', r"<title>([^<]*)"):
                   m = re.search(pat, h)
                   if m:
                       name = m.group(1)
@@ -130,6 +132,45 @@ jobs:
           name = re.sub(r'[\\/:*?"<>%\x00-\x1f]', " ", name)      # illegal in file names / yt-dlp output templates
           name = re.sub(r"\s+", " ", name).strip(" .-")
           print(name[:110].rstrip(" .-"))
+          PY
+          # Kan season / series page -> its episode pages. Line 1 = the series name, then one episode URL per line, in
+          # order (a series = all its seasons, season 1 first), at most $2. curl, not urllib: Kan's bot protection
+          # answers Python's HTTP client with 403.
+          cat > kan_list.py <<'PY'
+          import html, os, re, subprocess, sys
+          UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36")
+          CURL = os.environ.get("CURL_BIN", "curl")      # only for local tests on Windows (System32 curl.exe is challenged)
+          def curl(u):
+              r = subprocess.run([CURL, "-sL", "--max-time", "60", "-A", UA, u], capture_output=True)
+              return r.stdout.decode("utf-8", "replace")
+          EP = re.compile(r'<a\s+href="(https://www\.kan\.org\.il/content/kan/[^"]+/p-\d+/s\d+/\d+/)"\s+class="card card-row')
+          SEASON = re.compile(r'<a\s+class="dropdown-item"\s+href="(https://www\.kan\.org\.il/content/kan/[^"]+/p-\d+/s(\d+)/)"')
+          def episodes(page):
+              return list(dict.fromkeys(EP.findall(page)))
+          def program(page):
+              for pat in (r"npawData\.program\s*=\s*decodeEntities\('([^']*)'\)",
+                          r'<meta\s+property="og:title"\s+content="([^"]*)"', r"<title>\s*([^<]*)"):
+                  m = re.search(pat, page)
+                  t = re.sub(r"\s*[-|]?\s*(פרקים מלאים.*|עונה \d+.*)$", "", html.unescape(m.group(1))).strip() if m else ""
+                  if t:
+                      return t
+              return ""
+          url, limit = sys.argv[1], int(sys.argv[2])
+          page = curl(url)
+          urls = []
+          if re.search(r"/s\d+/?$", url):
+              urls = episodes(page)                       # one season
+          else:
+              seasons = sorted({(int(n), u) for u, n in SEASON.findall(page)})
+              if seasons:
+                  for _, u in seasons:                    # every season, season 1 first
+                      urls += episodes(curl(u))
+              else:
+                  urls = episodes(page) or episodes(curl(url.rstrip("/") + "/s1/"))
+          print(program(page))
+          for u in list(dict.fromkeys(urls))[:limit]:
+              print(u)
           PY
           # Per-item upload for playlists (used with yt-dlp --exec after_move): send the finished file to Drive, delete
           # the local copy, and record its path for the release notes.
@@ -153,6 +194,7 @@ jobs:
           [ "$MAX_ITEMS" -ge 1 ] || MAX_ITEMS=1
           [ "$MAX_ITEMS" -le 100 ] || MAX_ITEMS=100
           : > names.txt        # files already sent to Drive by the per-item upload (playlists only)
+          STREAM=0             # 1 = upload each finished item to Drive right away (multi-item runs with Drive configured)
           if [ "$PLAYLIST" = "yes" ]; then
             # zero-padded index so item 10 sorts after item 02 in Drive
             # --download-archive: when a retry uses the next player client, items that already finished are skipped
@@ -165,6 +207,7 @@ jobs:
               command -v rclone >/dev/null || { curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1; }
               mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
               COMMON+=(--exec "after_move:bash ./upload_one.sh {}")
+              STREAM=1
             fi
           else
             COMMON+=(--no-playlist -o "out/%(title)s.%(ext)s")
@@ -204,27 +247,62 @@ jobs:
             done
             produced        # whole chain used: part of a playlist still counts as a result, nothing at all does not
           }
-          # Kan (Israeli public broadcaster): its HLS is licensed for Israel and the runner is abroad, so pull it
-          # through il-relay, which Cloudflare runs in Tel Aviv. The page HTML itself is reachable from anywhere -
-          # only the CDN streams are geo-gated - so resolve the m3u8 here, then hand the relay-wrapped URL to yt-dlp.
+          # ---- Kan (Israeli public broadcaster) ----
+          # Its HLS streams are licensed for Israel and the runner is abroad, so they are pulled through il-relay, a
+          # Worker that Cloudflare runs in Tel Aviv. The page HTML is reachable from anywhere - only the CDN streams are
+          # geo-gated - so resolve the m3u8 from the page, then hand the relay-wrapped URL to yt-dlp.
+          KAN_UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+          # One episode page. $1 = page URL, $2 = folder inside out/ ('' for a single episode), $3 = index prefix ('' for
+          # a single episode). Returns 0 when its media file was written.
+          kan_episode() {
+            local url="$1" dir="$2" idx="$3" page m3u8 enc wrapped safe target x
+            page=$(curl -s -A "$KAN_UA" "$url")
+            m3u8=$(printf '%s' "$page" | grep -oE 'https://[a-z0-9.-]*cdn-redge\.media/[^"<> \\]*playlist\.m3u8[^"<> \\]*' | sed 's/&amp;/\&/g' | head -1)
+            if [ -z "$m3u8" ]; then echo "no stream found on: $url" | tee -a dl.log; return 1; fi
+            enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$m3u8")
+            wrapped="$RELAY/r/playlist.m3u8?k=$RELAY_KEY&u=$enc"
+            safe=$(printf '%s' "$page" | PYTHONUTF8=1 python3 kan_name.py); [ -n "$safe" ] || safe="kan_$JOB_ID"
+            target="out/${dir:+$dir/}${idx:+$idx - }$safe"
+            echo "file name: ${target#out/}"
+            set +e
+            if [ "$FORMAT" = "audio" ]; then
+              yt-dlp --no-progress -f "ba/b" -x --audio-format mp3 --audio-quality 0 -o "$target.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log
+            else
+              yt-dlp --no-progress -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "$target.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log
+            fi
+            set -e
+            prune_leftovers
+            for x in mp4 mp3 m4a mkv webm; do [ -f "$target.$x" ] && return 0; done
+            return 1
+          }
+          # multi-episode runs: send each finished episode to Drive at once (an episode is ~1 GB of video)
+          kan_flush() {
+            [ "$STREAM" = 1 ] || return 0
+            find out -type f \( "${MEDIA_NAMES[@]}" \) -print0 | while IFS= read -r -d '' f; do bash ./upload_one.sh "$f"; done
+          }
           case "$INPUT" in
             *kan.org.il*)
-              echo "::group::Kan via Israeli relay"
               [ -n "$RELAY" ] && [ -n "$RELAY_KEY" ] || { echo "REASON=Kan relay not configured (RELAY_URL/RELAY_KEY)" >> "$GITHUB_ENV"; echo "::error::relay missing"; exit 1; }
-              UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
-              page=$(curl -s -A "$UA" "$INPUT")
-              m3u8=$(printf '%s' "$page" | grep -oE 'https://[a-z0-9.-]*cdn-redge\.media/[^"<> \\]*playlist\.m3u8[^"<> \\]*' | sed 's/&amp;/\&/g' | head -1)
-              [ -n "$m3u8" ] || { echo "REASON=could not find the Kan stream on the page" >> "$GITHUB_ENV"; echo "::error::no m3u8"; exit 1; }
-              enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$m3u8")
-              wrapped="$RELAY/r/playlist.m3u8?k=$RELAY_KEY&u=$enc"
-              safe=$(printf '%s' "$page" | PYTHONUTF8=1 python3 kan_name.py); [ -n "$safe" ] || safe="kan_$JOB_ID"
-              echo "file name: $safe"
-              if [ "$FORMAT" = "audio" ]; then
-                yt-dlp --no-progress --hls-use-mpegts -x --audio-format mp3 --audio-quality 0 -o "out/$safe.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log || true
+              if printf '%s' "$INPUT" | grep -qE '/p-[0-9]+/(s[0-9]+/)?$'; then
+                # a whole season or series: expand to its episodes and download them one after another
+                PYTHONUTF8=1 python3 kan_list.py "$INPUT" "$MAX_ITEMS" > kan_eps.txt
+                series_dir=$(head -1 kan_eps.txt | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$series_dir" ] || series_dir="Kan"
+                total=$(( $(wc -l < kan_eps.txt) - 1 ))
+                echo "Kan: $total episode(s) of '$series_dir' (limit $MAX_ITEMS)"
+                if [ "$total" -lt 1 ]; then echo "REASON=could not find episodes on this Kan page" >> "$GITHUB_ENV"; echo "::error::no episodes"; exit 1; fi
+                i=0; kan_failed=0
+                while IFS= read -r ep_url; do
+                  i=$((i+1))
+                  echo "::group::Kan episode $i/$total"
+                  if kan_episode "$ep_url" "$series_dir" "$(printf '%02d' "$i")"; then kan_flush; else kan_failed=$((kan_failed+1)); fi
+                  echo "::endgroup::"
+                done < <(tail -n +2 kan_eps.txt)
+                rc=$kan_failed            # non-zero -> the release notes carry a "some items failed" warning
               else
-                yt-dlp --no-progress -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "out/$safe.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log || true
+                echo "::group::Kan episode via the Israeli relay"
+                kan_episode "$INPUT" "" "" || true
+                echo "::endgroup::"
               fi
-              echo "::endgroup::"
               ;;
             *)
               try_routes "${ROUTES[@]}" || true
@@ -245,7 +323,7 @@ jobs:
           echo "COUNT=$n" >> "$GITHUB_ENV"
           # a playlist whose last attempt still had failures: say so in the release notes instead of implying all is well
           if [ "$PLAYLIST" = yes ] && [ "${rc:-0}" -ne 0 ]; then
-            echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary YouTube error)" >> "$GITHUB_ENV"
+            echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary error)" >> "$GITHUB_ENV"
           fi
           du -sh out; find out -type f -printf '%P\n'
 

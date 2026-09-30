@@ -86,6 +86,20 @@ textarea.field{width:100%;min-height:64px;direction:ltr;text-align:left;resize:v
 .res:hover{transform:translateY(-2px);box-shadow:var(--lift)}
 .thumb{position:relative;aspect-ratio:16/9;border-radius:13px 13px 0 0;overflow:hidden;background:var(--sunk)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.res.poster .thumb{aspect-ratio:2/3}
+.a-kan{background:var(--audio-soft);color:var(--audio)}
+/* Kan: episode list of a series / season */
+.kview{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.kview-head{display:flex;align-items:center;gap:10px}
+.kview-head h3{font:600 17px/1.25 var(--disp);margin:0;flex:1;min-width:0;text-wrap:balance}
+.eplist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ep{display:grid;grid-template-columns:104px 1fr auto;gap:10px;align-items:center;background:var(--sunk);border-radius:12px;padding:8px}
+.ep img{width:104px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--surface);display:block}
+.ep .epm{min-width:0}
+.ep .epm .ttl{-webkit-line-clamp:2}
+.ep .epb{display:flex;gap:6px}
+.ep .epb button{min-width:46px;min-height:42px;border:0;border-radius:9px;font:600 15px/1 var(--body);cursor:pointer}
+@media (max-width:420px){.ep{grid-template-columns:84px 1fr}.ep img{width:84px}.ep .epb{grid-column:1/-1}.ep .epb button{flex:1}}
 .res.pl{margin-top:8px}
 .res.pl::before,.res.pl::after{content:"";position:absolute;inset-inline:10px;top:-5px;height:10px;border-radius:10px 10px 0 0;background:var(--sunk);border:1px solid var(--line);border-bottom:0;z-index:-1}
 .res.pl::after{inset-inline:20px;top:-9px;opacity:.7}
@@ -148,6 +162,7 @@ pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-mono
       <div class="seg" role="group" aria-label="סוג חיפוש" id="typeSeg">
         <button type="button" data-type="video" aria-pressed="true">סרטונים</button>
         <button type="button" data-type="playlist" aria-pressed="false">פלייליסטים</button>
+        <button type="button" data-type="kan" aria-pressed="false">כאן</button>
       </div>
       <form id="searchForm" class="row" autocomplete="off">
         <input id="q" class="field" type="search" placeholder="חיפוש ביוטיוב…" enterkeyhint="search" spellcheck="false">
@@ -189,6 +204,19 @@ pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-mono
 
       <div id="msg" class="msg info" hidden></div>
       <div id="shelf" class="shelf" hidden></div>
+      <section id="kanView" class="kview" hidden>
+        <div class="kview-head">
+          <button type="button" id="kanBack" class="chipbtn">→ לתוצאות</button>
+          <h3 id="kanTitle"></h3>
+        </div>
+        <div id="kanSeasons" class="seg" role="group" aria-label="עונות" hidden></div>
+        <div class="row" id="kanAll" hidden>
+          <button type="button" class="btn soft" style="flex:1" data-kanall="video">🎬 כל העונה</button>
+          <button type="button" class="btn soft" style="flex:1" data-kanall="audio">🎵 כל העונה (MP3)</button>
+        </div>
+        <p class="label" id="kanNote" hidden></p>
+        <ul id="kanEps" class="eplist"></ul>
+      </section>
       <div id="searchEmpty" class="empty" hidden></div>
     </section>
 
@@ -212,7 +240,7 @@ function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logou
 function paintSeg(){document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.type===searchType));
  document.querySelectorAll('#qualSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.q===quality));
  document.querySelectorAll('#maxSeg button').forEach(b=>b.setAttribute('aria-pressed',parseInt(b.dataset.max,10)===maxItems));
- $('q').placeholder=!canSearch?'חיפוש כבוי — הדבק קישור למטה':(searchType==='playlist'?'חיפוש פלייליסטים…':'חיפוש סרטונים…')}
+ $('q').placeholder=searchType==='kan'?'חיפוש סדרות בכאן…':(!canSearch?'חיפוש כבוי — הדבק קישור למטה':(searchType==='playlist'?'חיפוש פלייליסטים…':'חיפוש סרטונים…'))}
 $('typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;searchType=b.dataset.type;store.set('ytType',searchType);paintSeg();if($('q').value.trim())$('searchForm').requestSubmit()});
 $('qualSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;quality=b.dataset.q;store.set('ytQuality',quality);paintSeg()});
 $('maxSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;maxItems=parseInt(b.dataset.max,10)||50;store.set('ytMax',String(maxItems));paintSeg();showPreview(pasted);paintListChoice(pasted)});
@@ -226,13 +254,17 @@ $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch
 
 // search
 $('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
- if(!canSearch){say('החיפוש כבוי (אין מפתח YouTube). אפשר להדביק קישור ישיר.','err');return}
- const b=$('searchBtn');b.disabled=true;b.innerHTML='<span class="spin"></span>';say('');$('shelf').hidden=true;$('searchEmpty').hidden=true;
- try{const{items}=await api(`/api/search?type=${searchType}&q=`+encodeURIComponent(q));renderShelf(items||[])}
+ if(searchType!=='kan'&&!canSearch){say('החיפוש כבוי (אין מפתח YouTube). אפשר להדביק קישור ישיר.','err');return}
+ const b=$('searchBtn');b.disabled=true;b.innerHTML='<span class="spin"></span>';say('');$('shelf').hidden=true;$('kanView').hidden=true;$('searchEmpty').hidden=true;
+ try{const api_=searchType==='kan'?'/api/kan/search?q=':`/api/search?type=${searchType}&q=`;const{items}=await api(api_+encodeURIComponent(q));renderShelf(items||[])}
  catch(e){say(e.message,'err')}finally{b.disabled=false;b.textContent='חפש'}});
 function renderShelf(items){const box=$('shelf');
  if(!items.length){$('searchEmpty').textContent='לא נמצאו תוצאות';$('searchEmpty').hidden=false;box.hidden=true;return}
  box.innerHTML=items.map(v=>{const pl=v.kind==='playlist';const lbl=esc(v.title);
+  if(v.kind==='kan')return `<article class="res poster">
+   <div class="thumb">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}</div>
+   <div class="meta"><div class="ttl">${lbl}</div><div class="ch">כאן</div></div>
+   <div class="acts"><button class="a-kan" data-kan="${esc(v.url)}" data-title="${lbl}">📺 פרקים</button></div></article>`;
   return `<article class="res${pl?' pl':''}">
    <div class="thumb">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}${v.duration?`<span class="spec">${esc(v.duration)}</span>`:''}</div>
    <div class="meta"><div class="ttl">${lbl}</div><div class="ch">${esc(v.channel)}</div></div>
@@ -241,7 +273,37 @@ function renderShelf(items){const box=$('shelf');
     <button class="a-aud" data-url="${esc(v.url)}" data-fmt="audio" data-pl="${pl?'yes':'no'}" data-label="${lbl}">🎵 ${pl?'כל ה-MP3':'MP3'}</button>
    </div></article>`}).join('');
  box.hidden=false}
-$('shelf').addEventListener('click',e=>{const b=e.target.closest('button[data-url]');if(b)start(b.dataset.url,b.dataset.fmt,b.dataset.pl,b.dataset.label,b)});
+$('shelf').addEventListener('click',e=>{const k=e.target.closest('button[data-kan]');if(k){openKan(k.dataset.kan,k.dataset.title);return}
+ const b=e.target.closest('button[data-url]');if(b)start(b.dataset.url,b.dataset.fmt,b.dataset.pl,b.dataset.label,b)});
+
+// Kan: the episodes of a series / season, with a download button per episode and for the whole season
+let kanState=null;
+async function openKan(url,title){
+ $('shelf').hidden=true;$('searchEmpty').hidden=true;$('kanView').hidden=false;$('kanTitle').textContent=title||'';
+ $('kanSeasons').hidden=true;$('kanAll').hidden=true;$('kanNote').hidden=true;$('kanEps').innerHTML='<li class="empty">טוען פרקים…</li>';
+ $('kanView').scrollIntoView({behavior:'smooth',block:'start'});
+ try{kanState=await api('/api/kan/episodes?url='+encodeURIComponent(url));renderKan(kanState,title)}
+ catch(e){$('kanEps').innerHTML=`<li class="msg err">${esc(e.message)}</li>`}}
+function renderKan(d,fallbackTitle){
+ $('kanTitle').textContent=d.title||fallbackTitle||'';
+ const ss=d.seasons||[];$('kanSeasons').hidden=ss.length<2;
+ $('kanSeasons').innerHTML=ss.map(s=>`<button type="button" data-season="${esc(s.url)}" aria-pressed="${s.url===d.season}">${esc(s.label)}</button>`).join('');
+ const eps=d.episodes||[];$('kanAll').hidden=!eps.length;
+ $('kanNote').hidden=!eps.length;
+ $('kanNote').textContent=eps.length?`${eps.length} פרקים בעונה. "כל העונה" מוריד עד ${maxItems} פרקים ראשונים (הבורר "פריטים בפלייליסט"). תוכן כאן חסום מחוץ לישראל ולכן עובר בשרת ישראלי חינמי, שמוגבל לכ-30 פרקי וידאו ביום.`:'';
+ $('kanEps').innerHTML=eps.length?eps.map((e,i)=>`<li class="ep">
+   ${e.thumb?`<img loading="lazy" src="${esc(e.thumb)}" alt="">`:'<span></span>'}
+   <div class="epm"><div class="ttl">${esc(e.title)}</div><div class="ch">${esc(e.duration)}</div></div>
+   <div class="epb"><button class="a-vid" data-ep="${i}" data-fmt="video" aria-label="וידאו">🎬</button><button class="a-aud" data-ep="${i}" data-fmt="audio" aria-label="MP3">🎵</button></div></li>`).join(''):'<li class="empty">לא נמצאו פרקים בעונה הזו</li>'}
+$('kanBack').addEventListener('click',()=>{$('kanView').hidden=true;$('shelf').hidden=$('shelf').innerHTML==='';});
+$('kanSeasons').addEventListener('click',async e=>{const b=e.target.closest('button[data-season]');if(!b)return;
+ const keep=kanState&&kanState.title;$('kanEps').innerHTML='<li class="empty">טוען פרקים…</li>';
+ try{const d=await api('/api/kan/episodes?url='+encodeURIComponent(b.dataset.season));d.title=keep||d.title;kanState=d;renderKan(d)}
+ catch(err){$('kanEps').innerHTML=`<li class="msg err">${esc(err.message)}</li>`}});
+$('kanEps').addEventListener('click',e=>{const b=e.target.closest('button[data-ep]');if(!b||!kanState)return;
+ const ep=kanState.episodes[+b.dataset.ep];start(ep.url,b.dataset.fmt,'no',`${kanState.title} · ${ep.title}`,b)});
+$('kanAll').addEventListener('click',e=>{const b=e.target.closest('button[data-kanall]');if(!b||!kanState)return;
+ const label=(kanState.seasons||[]).find(s=>s.url===kanState.season);start(kanState.season||kanState.url,b.dataset.kanall,'yes',`${kanState.title}${label?' · '+label.label:''} (כל העונה)`,b)});
 
 // paste
 let pasted=null,infoTimer=null;
@@ -256,7 +318,12 @@ function showPreview(d){const box=$('preview');if(!d){box.hidden=true;return}box
  const sub=[d.channel?esc(d.channel):''];
  if(d.count!=null)sub.push(`פלייליסט · ${d.count} סרטונים`+(d.count>maxItems?` · יורדים ${maxItems} הראשונים`:''));
  else if(isPlaylistUrl(d.url||''))sub.push('פלייליסט'+` · עד ${maxItems} הראשונים`);
- box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="ch">${sub.filter(Boolean).join(' · ')}</div></div>`;box.hidden=false}
+ else if(d.kanKind==='series'||d.kanKind==='season')sub.push((d.kanKind==='series'?'סדרה':'עונה')+` · כל הפרקים, עד ${maxItems} הראשונים`);
+ box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="ch">${sub.filter(Boolean).join(' · ')}</div></div>`;
+ if(d.kanKind==='series'||d.kanKind==='season'){   // a Kan series/season link: offer picking single episodes
+  const b=document.createElement('button');b.type='button';b.className='btn soft';b.style.cssText='min-height:38px;margin-top:6px;font-size:13px';
+  b.textContent='📺 בחר פרקים';b.onclick=()=>openKan(d.url,d.title);box.querySelector('.pv').appendChild(b)}
+ box.hidden=false}
 $('url').addEventListener('input',()=>{const v=$('url').value.trim();paintListChoice(null);
  pasted=null;clearTimeout(infoTimer);if(!v){$('preview').hidden=true;return}infoTimer=setTimeout(()=>loadInfo(v),350)});
 async function loadInfo(v){const box=$('preview');
@@ -281,6 +348,8 @@ function badge(j){if(j.status==='pending'||j.status==='queued')return'<span clas
  if(j.conclusion==='success')return'<span class="badge b-ok">מוכן ✓</span>';if(j.conclusion==='cancelled')return'<span class="badge b-bad">בוטל</span>';return'<span class="badge b-bad">נכשל</span>'}
 function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
  if(/not made this video available in your country|not available in your country/i.test(r))return'הסרטון חסום מחוץ לישראל (למשל תוכן של כאן 11), והשרת בענן נמצא בחו"ל.';
+ if(/could not find the Kan stream/i.test(r))return'לא נמצא סרטון בדף הזה של כאן. לרוב זה דף שאינו פרק (למשל כתבה או דף סדרה ריק).';
+ if(/Kan relay not configured/i.test(r))return'השרת הישראלי לכאן לא מוגדר.';
  if(/private video/i.test(r))return'זה סרטון פרטי — אי אפשר להוריד אותו.';
  if(/HTTP Error 403|Forbidden/i.test(r))return'יוטיוב חסם את ההורדה הפעם (403). נסה שוב בעוד כמה דקות.';
  if(/confirm your age|age-restricted|inappropriate/i.test(r))return'לסרטון יש הגבלת גיל ויוטיוב דורש התחברות.';
