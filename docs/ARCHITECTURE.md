@@ -1,0 +1,103 @@
+# Architecture
+
+## The idea
+A button that works from any device (phone included) and runs a heavy job on free cloud compute: the person searches or
+pastes a link, and the video / audio ends up in their Google Drive. Nothing runs, or costs, while idle.
+
+```
+person (phone / PC / any browser)
+   |  login (password), search or paste a link, pick format / quality / item count
+   v
+Cloudflare Worker "yt-drive"        always on, free. Holds the secrets. Searches YouTube (Data API) and Kan
+   |                                (daily index), builds previews, dispatches the workflow, reports live status.
+   |  POST /repos/<owner>/yt-drive/actions/workflows/yt-drive.yml/dispatches   (with a random job_id)
+   v
+GitHub Actions  yt-drive.yml        free (public repo), Ubuntu runner, up to 240 min, ~14 GB disk
+   |  YouTube: yt-dlp through Cloudflare WARP (GitHub IPs are bot-flagged)      ---> YouTube
+   |  Kan:     page HTML direct; HLS segments through Worker "il-relay" (Tel Aviv) ---> Kan CDN (geo-gated to Israel)
+   |  rclone: each finished item -> the user's Google Drive
+   |  prerelease "job-<id>" = release notes (what was saved, warnings) - no media in it when Drive is on
+   v
+Cloudflare Worker  GET /api/jobs/:id   the page polls it: step progress, then "saved to Drive" or a download button
+```
+
+## Components
+| Component | Where | Notes |
+|---|---|---|
+| Site Worker `yt-drive` | `worker\src\index.js`, `worker\wrangler.toml` | password gate (HMAC cookie `ytd`, 30 days, no server state), all API routes below, serves `worker\public\` (assets with `run_worker_first = true`) |
+| Page (PWA) | `worker\public\index.html`, `sw.js`, `manifest.webmanifest`, `icon.svg` | Hebrew RTL, light/dark, installable, Android share target; tabs: videos / playlists / Kan; quality + item-count selectors; pasted-link preview; Kan episode list |
+| Relay Worker `il-relay` | `relay\src\index.js`, `relay\wrangler.toml` | `[placement] region = "azure:israelcentral"` makes Cloudflare run it in Tel Aviv with an Israel-geolocated egress IP. `GET /r/<name>?k=<RELAY_KEY>&u=<url>` streams the URL; HLS playlists come back with every child URI rewritten through the relay. Key + host allowlist (kan.org.il, cdn-redge.media, kaltura.com) |
+| Download workflow | `.github\workflows\yt-drive.yml` | see "Workflow" |
+| Kan index | `scripts\build_kan_index.py` -> `data\kan-index.json`, refreshed by `.github\workflows\kan-index.yml` (03:23 UTC daily + manual) | 362 series scraped from Kan's VOD lobby; the Worker reads it from raw.githubusercontent.com |
+
+## Site API (all except login need the cookie)
+| Route | Purpose |
+|---|---|
+| `POST /api/login` {password} / `GET /api/me` / `POST /api/logout` | session; `/api/me` also says whether YouTube search is configured |
+| `GET /api/search?q=&type=video\|playlist` | YouTube Data API v3 (`search.list` + `videos.list` / `playlists.list`); 100+ units per search of the 10,000/day quota |
+| `GET /api/info?url=` | preview of a pasted link: YouTube oEmbed (+ Data API for playlist title / item count), Kan Open Graph tags; tells episode / season / series apart |
+| `GET /api/kan/search?q=` | Hebrew-normalised match (no niqqud / punctuation, all words must match) over `data/kan-index.json`; up to 30 series |
+| `GET /api/kan/episodes?url=` | a Kan series (-> first season + season list) or season page parsed into episodes {url, title, duration, thumb} |
+| `POST /api/jobs` {input, options:{format, quality, playlist, max_items}} | validates the link (YouTube or Kan), dispatches the workflow, returns the job id |
+| `GET /api/jobs`, `GET /api/jobs/:id` | recent runs (matched by run title `yt [<id>]: <input>`); one job: status, current step, and when done the `job-<id>` release notes + files |
+| `GET /api/files/:assetId` | 302 to a short-lived download URL of a release asset (only used when Drive is off) |
+| `POST /share` | PWA share-target fallback |
+
+## Workflow `yt-drive.yml`
+Inputs: `input` (URL), `format` video|audio, `quality` best|1080|720|480 (default 1080), `playlist` no|yes, `max_items`
+1-100 (default 50), `job_id` (from the site; empty for manual runs). Run title: `yt [<job_id>]: <input>`.
+
+1. **Install tools** - ffmpeg, deno (yt-dlp's JS runtime), yt-dlp + `bgutil-ytdlp-pot-provider` + curl-cffi from pip; a
+   `brainicism/bgutil-ytdlp-pot-provider` service container supplies PO tokens.
+2. **Cloudflare WARP** (proxy mode, socks5 127.0.0.1:40000) - the free egress that passes YouTube's bot check.
+3. **Download**
+   - YouTube: routes in order (secret `YT_PROXY` if set, else WARP, then direct) x player clients (default, web_embedded,
+     tv+mweb, web_safari+android_vr). Single video: done when a real media file exists. Playlist / list link: done when
+     yt-dlp exits 0, otherwise the next client retries the missing items (`--download-archive`).
+   - Kan episode: resolve the m3u8 from the episode page, wrap it in the relay URL, hand it to yt-dlp (audio = the audio
+     rendition only, `-f ba/b`). Kan season / series link: `kan_list.py` expands it to episode pages (limit `max_items`),
+     each downloaded in turn.
+   - Only media extensions count as results; thumbnails, `.part` and subtitle leftovers are pruned.
+   - With Drive configured, multi-item runs upload every finished item at once (`upload_one.sh`, `rclone moveto`) so the
+     runner disk never holds a whole playlist / season and a timeout keeps what already finished.
+4. **Deliver** - Drive (rclone remote `gdrive`) or, without Drive, one release asset (several files -> one zip).
+5. **Publish result** - prerelease `job-<id>`: notes with source, format, `delivered:`, optional `reason:` / `warning:` and
+   the `files:` list.
+6. **Cleanup** - `job-*` releases older than 14 days are deleted.
+
+## Where files land in Drive (folder vars in parentheses)
+```
+YouTube/                                   (DRIVE_DIR, default "YouTube")
+  <title>.mp4 | .mp3                       single video
+  <playlist title>/NN - <title>.mp4|mp3    playlist items, zero-padded NN
+Kan/                                       (KAN_DRIVE_DIR, default "Kan")
+  <series> - <episode name>.mp4|mp3        one episode  (name = the page's JSON-LD "series | episode - subtitle")
+  <series>/NN - <series> - <episode>.ext   a season or series, NN = position in the download
+```
+Hebrew names are kept (`--windows-filenames`; yt-dlp turns `|` and `:` into the full-width `｜` `：`).
+
+## Secrets and variables (names only - values are never in this repo)
+| Where | Name | What |
+|---|---|---|
+| Worker `yt-drive` (secrets) | `APP_PASSWORD` | the site login password |
+| | `GH_TOKEN` | fine-grained PAT, this repo only, Actions RW + Contents RW (expires: watch for the site's "GitHub token invalid or expired" message) |
+| | `YT_API_KEY` | YouTube Data API v3 key (separate from any Gemini key) |
+| Worker `yt-drive` (vars in `worker\wrangler.toml`) | `GH_REPO`, `GH_REF`, `WORKFLOW` | `as0527121640-debug/yt-drive`, `main`, `yt-drive.yml` |
+| Worker `il-relay` (secret) | `RELAY_KEY` | shared key; same value as the repo secret |
+| GitHub repo (secrets) | `RCLONE_CONF_BASE64` | base64 of an rclone.conf with remote `gdrive` (scope `drive.file`) |
+| | `RELAY_KEY` | the relay key |
+| | `YT_COOKIES` *(optional)* | cookies.txt of a secondary Google account - fallback for the bot check |
+| | `YT_PROXY` *(optional)* | proxy URL (e.g. an Israeli residential one) - tried first when set |
+| GitHub repo (variables) | `RELAY_URL` | `https://il-relay.moovitdos.workers.dev` |
+| | `DRIVE_DIR`, `KAN_DRIVE_DIR` *(optional)* | Drive folders (defaults `YouTube`, `Kan`) |
+| This PC | `.local\relay.key` | copy of the relay key for manual tests (git-ignored) |
+
+## Limits of the free tiers (design around them)
+| Limit | Value | Consequence |
+|---|---|---|
+| Cloudflare Workers requests | 100,000 / day | the relay is hit once per 2-second HLS segment: ~3,000 per Kan video episode (~30 episodes/day), ~1,500 for audio |
+| Worker CPU | 10 ms per request | never parse big HTML in the Worker (the 2 MB Kan lobby is parsed by a workflow; the Worker only filters the 90 KB index and parses ~120 KB episode pages) |
+| YouTube Data API | 10,000 units / day | a search = 100 units, a link preview = 0 (oEmbed) or 1 (playlist details) |
+| GitHub Actions | unlimited minutes (public repo), 240 min per job here, ~14 GB disk | per-item upload keeps big playlists off the disk |
+| Release assets | 2 GB each | only matters when Drive is off |
+| Site upload limit | none used | the site only takes links, not files |

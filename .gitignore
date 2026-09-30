@@ -1,7 +1,20 @@
-worker/node_modules/
-worker/.wrangler/
-worker/.dev.vars
-relay/node_modules/
-relay/.wrangler/
-relay/.dev.vars
-worker/node_modules/
+# This repository is PUBLIC: nothing secret, and no account id / e-mail, may ever be committed.
+
+# dependencies and Wrangler state (local, re-creatable). NOTE: .wrangler/cache/wrangler-account.json holds the
+# Cloudflare account id and e-mail - it was committed once by accident (fixed), hence the explicit rules.
+node_modules/
+.wrangler/
+
+# local dev values and secrets
+.dev.vars
+*.dev.vars
+.env
+.env.*
+*.key
+
+# credentials that only ever belong in GitHub / Cloudflare secrets
+rclone.conf
+cookies.txt
+
+# local-only files (copy of the relay key, scratch notes): never committed
+.local/
