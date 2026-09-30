@@ -92,7 +92,41 @@ jobs:
       - name: Download
         run: |
           mkdir -p out
-          COMMON=(--no-progress --embed-metadata --embed-thumbnail --restrict-filenames --ignore-errors
+          # Kan file name from the episode page. Unicode-aware on purpose: an ASCII-only filter (tr [:alnum:]) deletes
+          # every Hebrew letter and left "_1.mp4" for "עלומים | פרק 1".
+          cat > kan_name.py <<'PY'
+          import html, json, re, sys
+          h = sys.stdin.read()
+          name = ""
+          # 1) the page's VideoObject in JSON-LD carries the full title: "series | episode - subtitle"
+          for blk in re.findall(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', h, re.S):
+              try:
+                  data = json.loads(blk)
+              except ValueError:
+                  continue
+              stack = [data]
+              while stack and not name:
+                  o = stack.pop()
+                  if isinstance(o, list):
+                      stack.extend(o)
+                  elif isinstance(o, dict):
+                      if o.get("@type") == "VideoObject" and o.get("name"):
+                          name = o["name"]
+                      stack.extend(o.values())
+          # 2) fall back to og:title, then <title>
+          if not name:
+              for pat in (r'<meta property="og:title" content="([^"]*)"', r"<title>([^<]*)"):
+                  m = re.search(pat, h)
+                  if m:
+                      name = m.group(1)
+                      break
+          name = html.unescape(name)
+          name = re.sub(r"\s*\|\s*", " - ", name)                # "series | episode" -> "series - episode"
+          name = re.sub(r'[\\/:*?"<>%\x00-\x1f]', " ", name)      # illegal in file names / yt-dlp output templates
+          name = re.sub(r"\s+", " ", name).strip(" .-")
+          print(name[:110].rstrip(" .-"))
+          PY
+          COMMON=(--no-progress --embed-metadata --embed-thumbnail --windows-filenames --trim-filenames 120 --ignore-errors
                   --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"
                   --extractor-args "generic:impersonate")
           [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
@@ -135,13 +169,12 @@ jobs:
               [ -n "$RELAY" ] && [ -n "$RELAY_KEY" ] || { echo "REASON=Kan relay not configured (RELAY_URL/RELAY_KEY)" >> "$GITHUB_ENV"; echo "::error::relay missing"; exit 1; }
               UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
               page=$(curl -s -A "$UA" "$INPUT")
-              title=$(printf '%s' "$page" | grep -oE '<meta property="og:title" content="[^"]*"' | head -1 | sed -E 's/.*content="([^"]*)".*/\1/')
-              [ -n "$title" ] || title=$(printf '%s' "$page" | grep -oE '<title>[^<]*' | head -1 | sed 's/<title>//')
               m3u8=$(printf '%s' "$page" | grep -oE 'https://[a-z0-9.-]*cdn-redge\.media/[^"<> \\]*playlist\.m3u8[^"<> \\]*' | sed 's/&amp;/\&/g' | head -1)
               [ -n "$m3u8" ] || { echo "REASON=could not find the Kan stream on the page" >> "$GITHUB_ENV"; echo "::error::no m3u8"; exit 1; }
               enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$m3u8")
               wrapped="$RELAY/r/playlist.m3u8?k=$RELAY_KEY&u=$enc"
-              safe=$(printf '%s' "$title" | tr -cd '[:alnum:][:space:]._()-' | sed 's/[[:space:]]\+/_/g' | cut -c1-90); [ -n "$safe" ] || safe="kan_$JOB_ID"
+              safe=$(printf '%s' "$page" | PYTHONUTF8=1 python3 kan_name.py); [ -n "$safe" ] || safe="kan_$JOB_ID"
+              echo "file name: $safe"
               if [ "$FORMAT" = "audio" ]; then
                 yt-dlp --no-progress --hls-use-mpegts -x --audio-format mp3 --audio-quality 0 -o "out/$safe.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log || true
               else
@@ -174,14 +207,19 @@ jobs:
             mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
             rclone copy out "gdrive:$DRIVE_DIR" --transfers 2
             echo "where=Google Drive / $DRIVE_DIR ($COUNT file(s))" >> "$GITHUB_OUTPUT"
+            find out -type f -printf '%P\n' | head -30 > names.txt      # what landed in Drive, shown in the release notes
             find out -type f -delete
             printf '%s\n' "Uploaded $COUNT file(s) to Google Drive / $DRIVE_DIR" > out/_uploaded.txt
           else
             # download from the site: a single file as-is; several files (playlist) zipped into one archive
+            find out -type f -printf '%P\n' | head -30 > names.txt
             if [ "$COUNT" -gt 1 ]; then
               ( cd out && zip -qr ../result.zip . && rm -rf ./* && mv ../result.zip . )
             else
               f=$(find out -type f | head -1); [ "$(dirname "$f")" = out ] || { mv "$f" out/; find out -mindepth 1 -type d -empty -delete; }
+              # GitHub rewrites non-ASCII release-asset names, so this download-from-site copy gets an ASCII name
+              f=$(find out -type f | head -1); b=$(basename "$f")
+              if printf '%s' "$b" | LC_ALL=C grep -q '[^ -~]'; then mv -- "$f" "out/download_${JOB_ID:-file}.${b##*.}"; fi
             fi
             echo "where=download from the site" >> "$GITHUB_OUTPUT"
           fi
@@ -190,7 +228,7 @@ jobs:
         if: always() && inputs.job_id != ''
         run: |
           notes=$(mktemp)
-          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; } > "$notes"
+          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
           files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
           gh release create "job-$JOB_ID" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
             --title "yt $JOB_ID" --notes-file "$notes" "${files[@]}"
