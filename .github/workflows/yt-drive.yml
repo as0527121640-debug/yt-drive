@@ -155,7 +155,8 @@ jobs:
           : > names.txt        # files already sent to Drive by the per-item upload (playlists only)
           if [ "$PLAYLIST" = "yes" ]; then
             # zero-padded index so item 10 sorts after item 02 in Drive
-            COMMON+=(--yes-playlist --playlist-end "$MAX_ITEMS" -o "out/%(playlist_title|Playlist)s/%(playlist_index)02d - %(title)s.%(ext)s")
+            # --download-archive: when a retry uses the next player client, items that already finished are skipped
+            COMMON+=(--yes-playlist --playlist-end "$MAX_ITEMS" --download-archive dl_archive.txt -o "out/%(playlist_title|Playlist)s/%(playlist_index)02d - %(title)s.%(ext)s")
             if [ -n "$RCLONE_CONF_BASE64" ]; then
               # Drive is configured: upload each item as soon as it is finished and delete it locally. A long video
               # playlist then never has to fit on the runner's ~14 GB disk, and a timeout or one failing item still
@@ -168,8 +169,13 @@ jobs:
           else
             COMMON+=(--no-playlist -o "out/%(title)s.%(ext)s")
           fi
-          # true when something was produced: files still in out/, or items already uploaded per-item
-          produced() { [ "$(find out -type f | wc -l)" -gt 0 ] || [ -s names.txt ]; }
+          # Only real media counts as a result. A failed download can leave a thumbnail (.webp), a .part or a subtitle
+          # file behind - counting those made a 403 look like success and uploaded the thumbnails to Drive.
+          MEDIA_NAMES=(-iname '*.mp4' -o -iname '*.mkv' -o -iname '*.webm' -o -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.opus' -o -iname '*.ogg' -o -iname '*.flac' -o -iname '*.wav' -o -iname '*.mov')
+          media_count() { find out -type f \( "${MEDIA_NAMES[@]}" \) | wc -l; }
+          prune_leftovers() { find out -type f ! \( "${MEDIA_NAMES[@]}" \) -delete; }
+          # true when media exists in out/, or items were already uploaded per-item
+          produced() { [ "$(media_count)" -gt 0 ] || [ -s names.txt ]; }
           if [ "$FORMAT" = "audio" ]; then
             FMT=(-x --audio-format mp3 --audio-quality 0)
           else
@@ -179,18 +185,24 @@ jobs:
             esac
             FMT=(-f "$SEL" --merge-output-format mp4 --embed-subs --sub-langs "iw,he,en.*")
           fi
-          # fallback chain: each route x each player client; stop at the first that produces files
+          # fallback chain: each route x each player client. A single video is done as soon as media exists. A
+          # playlist is done when every item went through (yt-dlp exit 0); otherwise the next client retries the
+          # missing ones (--download-archive skips finished items).
           try_routes() {
             for ROUTE in "$@"; do
               PX=(); [ "$ROUTE" != direct ] && PX=(--proxy "$ROUTE")
               for CLIENTS in "default" "web_embedded" "tv,mweb" "web_safari,android_vr"; do
                 echo "::group::try route=$ROUTE player_client=$CLIENTS"
-                yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" 2>&1 | tee -a dl.log || true
+                set +e
+                yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" 2>&1 | tee -a dl.log
+                rc=${PIPESTATUS[0]}
+                set -e
                 echo "::endgroup::"
-                if produced; then echo "OK via route=$ROUTE player_client=$CLIENTS"; return 0; fi
+                prune_leftovers
+                if produced && { [ "$PLAYLIST" != yes ] || [ "$rc" -eq 0 ]; }; then echo "OK via route=$ROUTE player_client=$CLIENTS"; return 0; fi
               done
             done
-            return 1
+            produced        # whole chain used: part of a playlist still counts as a result, nothing at all does not
           }
           # Kan (Israeli public broadcaster): its HLS is licensed for Israel and the runner is abroad, so pull it
           # through il-relay, which Cloudflare runs in Tel Aviv. The page HTML itself is reachable from anywhere -
@@ -221,8 +233,9 @@ jobs:
               # Israeli proxy) works there.
               ;;
           esac
-          # files still in out/ plus the ones the per-item upload already sent to Drive
-          n=$(( $(find out -type f | wc -l) + $(wc -l < names.txt) ))
+          # media still in out/ plus the items the per-item upload already sent to Drive
+          prune_leftovers
+          n=$(( $(media_count) + $(wc -l < names.txt) ))
           if [ "$n" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")
             r=$(grep -m1 -E "not made this video available in your country" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
@@ -230,6 +243,10 @@ jobs:
             echo "::error::nothing downloaded: $r"; exit 1
           fi
           echo "COUNT=$n" >> "$GITHUB_ENV"
+          # a playlist whose last attempt still had failures: say so in the release notes instead of implying all is well
+          if [ "$PLAYLIST" = yes ] && [ "${rc:-0}" -ne 0 ]; then
+            echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary YouTube error)" >> "$GITHUB_ENV"
+          fi
           du -sh out; find out -type f -printf '%P\n'
 
       - name: Deliver
@@ -262,7 +279,7 @@ jobs:
         if: always() && inputs.job_id != ''
         run: |
           notes=$(mktemp)
-          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
+          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -n "$WARN" ]; then echo "warning: $WARN"; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
           files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
           gh release create "job-$JOB_ID" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
             --title "yt $JOB_ID" --notes-file "$notes" "${files[@]}"
