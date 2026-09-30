@@ -163,7 +163,15 @@ pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-mono
             <button type="button" data-q="480">480p</button>
           </div>
         </div>
-        <span class="label" style="flex-basis:100%">MP3 יוצא תמיד באיכות הגבוהה ביותר. פלייליסט: עד 50 פריטים.</span>
+        <div class="grp"><span class="label">פריטים בפלייליסט</span>
+          <div class="seg" role="group" aria-label="מספר פריטים בפלייליסט" id="maxSeg">
+            <button type="button" data-max="10">10</button>
+            <button type="button" data-max="25">25</button>
+            <button type="button" data-max="50">50</button>
+            <button type="button" data-max="100">100</button>
+          </div>
+        </div>
+        <span class="label" style="flex-basis:100%">MP3 יוצא תמיד באיכות הגבוהה ביותר. בפלייליסט יורדים הפריטים הראשונים לפי הסדר.</span>
       </div>
 
       <details class="paste">
@@ -171,7 +179,7 @@ pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-mono
         <div class="stack">
           <textarea id="url" class="field" placeholder="https://youtube.com/watch?v=…  או  playlist?list=…" spellcheck="false"></textarea>
           <div id="preview" class="preview" hidden></div>
-          <label class="check" id="plWrap" hidden><input type="checkbox" id="plAll"> להוריד את כל הפלייליסט (עד 50)</label>
+          <label class="check" id="plWrap" hidden><input type="checkbox" id="plAll"> <span id="plLabel">להוריד את כל הפלייליסט</span></label>
           <div class="row">
             <button class="btn soft" style="flex:1" data-paste="video">🎬 וידאו</button>
             <button class="btn soft" style="flex:1" data-paste="audio">🎵 MP3</button>
@@ -192,7 +200,7 @@ pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-mono
 <script>
 const $=id=>document.getElementById(id);let polling=null,lastJobs=[],canSearch=false;const details={};
 const store={get(k,d){try{return localStorage.getItem(k)??d}catch{return d}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
-let searchType=store.get('ytType','video'),quality=store.get('ytQuality','1080');
+let searchType=store.get('ytType','video'),quality=store.get('ytQuality','1080'),maxItems=parseInt(store.get('ytMax','50'),10)||50;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function api(path,opts={}){const r=await fetch(path,{credentials:'same-origin',...opts});let d={};try{d=await r.json()}catch{}
  if(r.status===401&&path!=='/api/login'){showLogin();throw new Error(d.error||'צריך להתחבר')}if(!r.ok)throw new Error(d.error||('שגיאה '+r.status));return d}
@@ -203,9 +211,11 @@ function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logou
 // segmented controls
 function paintSeg(){document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.type===searchType));
  document.querySelectorAll('#qualSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.q===quality));
+ document.querySelectorAll('#maxSeg button').forEach(b=>b.setAttribute('aria-pressed',parseInt(b.dataset.max,10)===maxItems));
  $('q').placeholder=!canSearch?'חיפוש כבוי — הדבק קישור למטה':(searchType==='playlist'?'חיפוש פלייליסטים…':'חיפוש סרטונים…')}
 $('typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;searchType=b.dataset.type;store.set('ytType',searchType);paintSeg();if($('q').value.trim())$('searchForm').requestSubmit()});
 $('qualSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;quality=b.dataset.q;store.set('ytQuality',quality);paintSeg()});
+$('maxSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;maxItems=parseInt(b.dataset.max,10)||50;store.set('ytMax',String(maxItems));paintSeg();showPreview(pasted);paintListChoice(pasted)});
 
 // login
 async function doLogin(){const b=$('loginBtn');b.disabled=true;$('loginMsg').hidden=true;
@@ -235,19 +245,30 @@ $('shelf').addEventListener('click',e=>{const b=e.target.closest('button[data-ur
 
 // paste
 let pasted=null,infoTimer=null;
-$('url').addEventListener('input',()=>{const v=$('url').value.trim();$('plWrap').hidden=!/[?&]list=/.test(v)||/youtube\.com\/playlist\?/i.test(v);
+const isPlaylistUrl=u=>/youtube\.com\/playlist\?/i.test(u);
+// the "whole playlist" checkbox: shown for a video link that also carries a list (a pure playlist link always means the list)
+function paintListChoice(d){const v=$('url').value.trim();const has=/[?&]list=/.test(v)&&!isPlaylistUrl(v);$('plWrap').hidden=!has;
+ if(!has)return;const n=d&&d.listCount!=null?d.listCount:null;
+ $('plLabel').textContent='להוריד את כל הפלייליסט'+(d&&d.listTitle?` "${d.listTitle}"`:'')+
+  (n!=null?` (${n} סרטונים${n>maxItems?`, יורדים ${maxItems} הראשונים`:''})`:` (עד ${maxItems} הראשונים)`)}
+// preview card for a pasted link: thumbnail, title, channel; for a playlist link also how many videos it holds
+function showPreview(d){const box=$('preview');if(!d){box.hidden=true;return}box.className='preview';
+ const sub=[d.channel?esc(d.channel):''];
+ if(d.count!=null)sub.push(`פלייליסט · ${d.count} סרטונים`+(d.count>maxItems?` · יורדים ${maxItems} הראשונים`:''));
+ else if(isPlaylistUrl(d.url||''))sub.push('פלייליסט'+` · עד ${maxItems} הראשונים`);
+ box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="ch">${sub.filter(Boolean).join(' · ')}</div></div>`;box.hidden=false}
+$('url').addEventListener('input',()=>{const v=$('url').value.trim();paintListChoice(null);
  pasted=null;clearTimeout(infoTimer);if(!v){$('preview').hidden=true;return}infoTimer=setTimeout(()=>loadInfo(v),350)});
 async function loadInfo(v){const box=$('preview');
- try{const d=await api('/api/info?url='+encodeURIComponent(v));pasted=d;box.className='preview';
-  box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="ch">${esc(d.channel)}${d.playlist?' · פלייליסט':''}</div></div>`;box.hidden=false}
+ try{const d=await api('/api/info?url='+encodeURIComponent(v));pasted=d;showPreview(d);paintListChoice(d)}
  catch(e){box.className='preview err';box.textContent=e.message;box.hidden=false}}
 document.querySelectorAll('button[data-paste]').forEach(b=>b.addEventListener('click',()=>{const u=(pasted&&pasted.url)||$('url').value.trim();if(!u){say('הדבק קישור','err');return}
- const pl=/youtube\.com\/playlist\?/i.test(u)||$('plAll').checked?'yes':'no';start(u,b.dataset.paste,pl,(pasted&&pasted.title)||u)}));
+ const pl=isPlaylistUrl(u)||$('plAll').checked&&!$('plWrap').hidden?'yes':'no';start(u,b.dataset.paste,pl,(pasted&&pasted.title)||u)}));
 
 // start a job
 async function start(url,format,playlist,label,btn){if(btn)btn.disabled=true;say('שולח…','info');
- try{const j=await api('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:url,options:{format,quality,playlist}})});
-  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist});say('נשלח! מופיע למטה ומתעדכן לבד.','info');await loadJobs()}
+ try{const j=await api('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:url,options:{format,quality,playlist,max_items:maxItems}})});
+  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח! מופיע למטה ומתעדכן לבד.','info');await loadJobs()}
  catch(e){say(e.message,'err')}finally{if(btn)btn.disabled=false}}
 
 // download log
@@ -270,7 +291,7 @@ function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
 const STEP={'Set up job':'מכין שרת','Install tools':'מכין כלים','Download':'מוריד מיוטיוב','Deliver':'שולח לדרייב','Publish result':'מסיים','Cleanup old files':'מסיים'};
 function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div class="panel empty">עוד אין הורדות — חפש משהו למעלה</div>';return}const M=metaAll();
  box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const m=M[j.id]||{};const src=m.label||j.input||'';let body='';
-  const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('פלייליסט');
+  const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('פלייליסט'+(m.max?` · עד ${m.max}`:''));
   if(j.status!=='completed'&&d.step){const pct=d.steps_total?Math.round(100*d.steps_done/d.steps_total):0;body+=`<div class="step">${esc(STEP[d.step]||d.step)}</div><div class="bar"><i style="width:${pct}%"></i></div>`}
   if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));const drive=/Google Drive/i.test(d.summary||'');
    body+='<div class="jactions">';

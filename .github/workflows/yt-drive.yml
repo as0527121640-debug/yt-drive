@@ -22,10 +22,14 @@ on:
         options: [best, "1080", "720", "480"]
         default: "1080"
       playlist:
-        description: 'download the whole playlist (up to 50 items)'
+        description: 'download the playlist the link points to (instead of only the single video)'
         type: choice
         options: ["no", "yes"]
         default: "no"
+      max_items:
+        description: 'playlist: how many items from the start (1-100)'
+        required: false
+        default: "50"
       job_id:
         description: 'site job id (empty for manual runs)'
         required: false
@@ -37,7 +41,7 @@ permissions:
 jobs:
   get:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 240                              # a 100-item video playlist is long; single videos finish in minutes
     env:
       GH_TOKEN: ${{ github.token }}
       JOB_ID: ${{ inputs.job_id }}
@@ -45,6 +49,7 @@ jobs:
       FORMAT: ${{ inputs.format }}
       QUALITY: ${{ inputs.quality }}
       PLAYLIST: ${{ inputs.playlist }}
+      MAX_ITEMS: ${{ inputs.max_items }}
       RCLONE_CONF_BASE64: ${{ secrets.RCLONE_CONF_BASE64 }}
       YT_COOKIES: ${{ secrets.YT_COOKIES }}          # optional: Netscape cookies.txt of a (secondary) Google account
       YT_PROXY: ${{ secrets.YT_PROXY }}              # optional: http(s)/socks proxy, e.g. a residential/Israeli one
@@ -126,18 +131,44 @@ jobs:
           name = re.sub(r"\s+", " ", name).strip(" .-")
           print(name[:110].rstrip(" .-"))
           PY
+          # Per-item upload for playlists (used with yt-dlp --exec after_move): send the finished file to Drive, delete
+          # the local copy, and record its path for the release notes.
+          cat > upload_one.sh <<'SH'
+          f="$1"
+          rel=$(realpath -m --relative-to=out "$f")
+          if rclone moveto "$f" "gdrive:${DRIVE_DIR}/${rel}" --log-level ERROR; then
+            printf '%s\n' "$rel" >> names.txt
+          else
+            echo "upload failed for: $rel (kept on the runner; the final copy step retries it)" >&2
+          fi
+          SH
           COMMON=(--no-progress --embed-metadata --embed-thumbnail --windows-filenames --trim-filenames 120 --ignore-errors
                   --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"
                   --extractor-args "generic:impersonate")
           [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
           # routes to try, in order: a user proxy if given; else Cloudflare WARP first (GitHub IPs are bot-flagged), then direct
           if [ -n "$YT_PROXY" ]; then ROUTES=("$YT_PROXY"); else ROUTES=(); [ "$WARP" = 1 ] && ROUTES+=(socks5://127.0.0.1:40000); ROUTES+=(direct); fi
-          # whole playlist (capped at 50) vs a single video
+          # the link's playlist (first MAX_ITEMS, 1-100) vs a single video
+          case "$MAX_ITEMS" in ''|*[!0-9]*) MAX_ITEMS=50 ;; esac
+          [ "$MAX_ITEMS" -ge 1 ] || MAX_ITEMS=1
+          [ "$MAX_ITEMS" -le 100 ] || MAX_ITEMS=100
+          : > names.txt        # files already sent to Drive by the per-item upload (playlists only)
           if [ "$PLAYLIST" = "yes" ]; then
-            COMMON+=(--yes-playlist --playlist-end 50 -o "out/%(playlist_title|)s/%(playlist_index&{} - |)s%(title)s.%(ext)s")
+            # zero-padded index so item 10 sorts after item 02 in Drive
+            COMMON+=(--yes-playlist --playlist-end "$MAX_ITEMS" -o "out/%(playlist_title|Playlist)s/%(playlist_index)02d - %(title)s.%(ext)s")
+            if [ -n "$RCLONE_CONF_BASE64" ]; then
+              # Drive is configured: upload each item as soon as it is finished and delete it locally. A long video
+              # playlist then never has to fit on the runner's ~14 GB disk, and a timeout or one failing item still
+              # leaves everything finished so far in Drive.
+              curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+              mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
+              COMMON+=(--exec "after_move:bash ./upload_one.sh {}")
+            fi
           else
             COMMON+=(--no-playlist -o "out/%(title)s.%(ext)s")
           fi
+          # true when something was produced: files still in out/, or items already uploaded per-item
+          produced() { [ "$(find out -type f | wc -l)" -gt 0 ] || [ -s names.txt ]; }
           if [ "$FORMAT" = "audio" ]; then
             FMT=(-x --audio-format mp3 --audio-quality 0)
           else
@@ -155,7 +186,7 @@ jobs:
                 echo "::group::try route=$ROUTE player_client=$CLIENTS"
                 yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" 2>&1 | tee -a dl.log || true
                 echo "::endgroup::"
-                if [ "$(find out -type f | wc -l)" -gt 0 ]; then echo "OK via route=$ROUTE player_client=$CLIENTS"; return 0; fi
+                if produced; then echo "OK via route=$ROUTE player_client=$CLIENTS"; return 0; fi
               done
             done
             return 1
@@ -189,7 +220,8 @@ jobs:
               # Israeli proxy) works there.
               ;;
           esac
-          n=$(find out -type f | wc -l)
+          # files still in out/ plus the ones the per-item upload already sent to Drive
+          n=$(( $(find out -type f | wc -l) + $(wc -l < names.txt) ))
           if [ "$n" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")
             r=$(grep -m1 -E "not made this video available in your country" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
@@ -207,12 +239,12 @@ jobs:
             mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
             rclone copy out "gdrive:$DRIVE_DIR" --transfers 2
             echo "where=Google Drive / $DRIVE_DIR ($COUNT file(s))" >> "$GITHUB_OUTPUT"
-            find out -type f -printf '%P\n' | head -30 > names.txt      # what landed in Drive, shown in the release notes
+            find out -type f -printf '%P\n' >> names.txt      # what landed in Drive (per-item uploads already added theirs)
             find out -type f -delete
             printf '%s\n' "Uploaded $COUNT file(s) to Google Drive / $DRIVE_DIR" > out/_uploaded.txt
           else
             # download from the site: a single file as-is; several files (playlist) zipped into one archive
-            find out -type f -printf '%P\n' | head -30 > names.txt
+            find out -type f -printf '%P\n' >> names.txt
             if [ "$COUNT" -gt 1 ]; then
               ( cd out && zip -qr ../result.zip . && rm -rf ./* && mv ../result.zip . )
             else

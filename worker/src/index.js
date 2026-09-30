@@ -36,7 +36,7 @@ async function route(request, env) {
   if (p === '/api/logout' && request.method === 'POST')
     return json({ ok: true }, 200, { 'Set-Cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
   if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '', url.searchParams.get('type'));
-  if (p === '/api/info' && request.method === 'GET') return linkInfo(url.searchParams.get('url') || '');
+  if (p === '/api/info' && request.method === 'GET') return linkInfo(env, url.searchParams.get('url') || '');
   if (p === '/api/jobs' && request.method === 'POST') return startJob(request, env);
   if (p === '/api/jobs' && request.method === 'GET') return listJobs(env);
   let m = p.match(/^\/api\/jobs\/([0-9a-f]{6,16})$/);
@@ -115,8 +115,24 @@ async function search(env, q, type) {
   });
   return json({ items });
 }
-// title + channel + thumbnail for a pasted link. YouTube -> public oEmbed; Kan -> the page's Open Graph tags.
-async function linkInfo(raw) {
+// A playlist's title / channel / thumbnail / item count from the YouTube Data API (1 quota unit). Null when there
+// is no key, no such list (auto-generated mixes such as list=RD... are not in the API), or the quota is spent.
+async function playlistMeta(env, listId) {
+  if (!env.YT_API_KEY || !listId) return null;
+  try {
+    const d = await ytApi(env, `playlists?part=snippet,contentDetails&id=${encodeURIComponent(listId)}`);
+    const it = (d.items || [])[0];
+    if (!it) return null;
+    const sn = it.snippet || {}, th = sn.thumbnails || {};
+    return { title: sn.title || '', channel: sn.channelTitle || '',
+      thumb: (th.medium || th.high || th.default || {}).url || '', count: it.contentDetails && it.contentDetails.itemCount };
+  } catch { return null; }
+}
+const listIdOf = u => ((String(u).match(/[?&]list=([A-Za-z0-9_-]+)/) || [])[1]) || '';
+
+// title + channel + thumbnail for a pasted link. YouTube -> public oEmbed (+ playlist details from the Data API);
+// Kan -> the page's Open Graph tags.
+async function linkInfo(env, raw) {
   const m = String(raw).match(/https?:\/\/\S+/i);
   const u = m ? m[0] : String(raw).trim();
   if (KAN_URL.test(u)) {
@@ -128,11 +144,19 @@ async function linkInfo(raw) {
     return json({ url: u, title: title.trim(), channel: 'כאן 11', thumb: og('image'), playlist: false, kan: true });
   }
   if (!YT_URL.test(u)) return json({ error: 'לא קישור של YouTube או כאן' }, 400);
+  const listId = listIdOf(u);
+  const pureList = /youtube\.com\/playlist\?/i.test(u);
+  const pm = listId ? await playlistMeta(env, listId) : null;
+  if (pureList && pm) {                       // a playlist link: describe the list itself
+    return json({ url: u, title: pm.title, channel: pm.channel, thumb: pm.thumb, playlist: true, count: pm.count ?? null });
+  }
   const r = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(u));
-  if (!r.ok) return json({ error: r.status === 404 ? 'הסרטון לא נמצא או פרטי' : 'לא הצלחתי לקרוא את פרטי הקישור' }, 404);
+  if (!r.ok) return json({ error: pureList ? 'הפלייליסט לא נמצא או פרטי' : (r.status === 404 ? 'הסרטון לא נמצא או פרטי' : 'לא הצלחתי לקרוא את פרטי הקישור') }, 404);
   const d = await r.json();
+  // a video link that also carries a list (watch?v=..&list=..): describe the video, and add the list's size and
+  // title so the page can offer "download the whole playlist"
   return json({ url: u, title: d.title || '', channel: d.author_name || '', thumb: d.thumbnail_url || '',
-    playlist: /youtube\.com\/playlist\?/i.test(u) || /[?&]list=/.test(u) });
+    playlist: pureList || !!listId, listCount: pm ? (pm.count ?? null) : null, listTitle: pm ? pm.title : '' });
 }
 async function searchPlaylists(env, q) {
   const s = await ytApi(env, `search?part=snippet&type=playlist&maxResults=12&q=${encodeURIComponent(q)}`);
@@ -187,10 +211,12 @@ async function startJob(request, env) {
   const quality = ['best', '1080', '720', '480'].includes(String(o.quality)) ? String(o.quality) : '1080';
   // a pure playlist link always means the whole list; a watch?v=..&list=.. link only when asked
   const playlist = (o.playlist === 'yes' || /youtube\.com\/playlist\?/i.test(input)) ? 'yes' : 'no';
+  // how many playlist items from the start: 1..100, default 50 (Kan / single videos ignore it)
+  const maxItems = String(Math.min(100, Math.max(1, parseInt(o.max_items, 10) || 50)));
   const id = newId();
   await ghJson(env, `/repos/${env.GH_REPO}/actions/workflows/${env.WORKFLOW}/dispatches`, {
-    method: 'POST', body: JSON.stringify({ ref: env.GH_REF, inputs: { input, format, quality, playlist, job_id: id } }) });
-  return json({ id, input, format, quality, playlist, created_at: new Date().toISOString() });
+    method: 'POST', body: JSON.stringify({ ref: env.GH_REF, inputs: { input, format, quality, playlist, max_items: maxItems, job_id: id } }) });
+  return json({ id, input, format, quality, playlist, max_items: maxItems, created_at: new Date().toISOString() });
 }
 async function recentRuns(env, n = 40) {
   const d = await ghJson(env, `/repos/${env.GH_REPO}/actions/workflows/${env.WORKFLOW}/runs?per_page=${n}`);
