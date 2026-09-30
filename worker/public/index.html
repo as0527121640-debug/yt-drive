@@ -14,8 +14,8 @@
 <style>
 /* Layout: a TV screen. Always dark, almost no frames: the sources are a row of bold words, the search is a single
    line, the library is Netflix-style poster rails (one per genre), and the downloads live in a drawer that slides up
-   from the bottom on a phone and is a fixed side panel on a wide screen. White is the only accent; green and red are
-   reserved for done / failed. */
+   from the bottom (a bottom-corner panel on a wide screen) and is only fetched when opened. White is the only accent;
+   green and red are reserved for done / failed. */
 :root{
   --bg:#0a0a0a;--surface:#161616;--sunk:#262626;--ink:#ffffff;--muted:#8d8d8d;--line:#2c2c2c;
   --ok:#3ddc84;--ok-soft:#10301e;--bad:#ff6b6b;--bad-soft:#3a1515;--warn:#ffd166;--warn-soft:#3a3018;
@@ -38,7 +38,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 .noscroll{scrollbar-width:none}.noscroll::-webkit-scrollbar{display:none}
 
 .wrap{padding-inline:var(--gut);padding-block:8px calc(var(--bar) + 28px + env(safe-area-inset-bottom,0px))}
-@media(min-width:900px){.wrap{padding-inline-end:calc(var(--panel) + var(--gut));padding-block:12px 48px;max-width:calc(960px + var(--panel))}}
+@media(min-width:900px){.wrap{padding-block:12px calc(var(--bar) + 40px);max-width:960px}}
 
 /* header */
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 14px}
@@ -165,7 +165,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 @media(max-width:420px){.ep{grid-template-columns:auto 88px minmax(0,1fr)}.ep img,.ep .ph{width:88px}}
 .kview .hint{line-height:1.45}
 
-/* the downloads drawer (phone) / side panel (wide) */
+/* the downloads drawer: collapsed to a bar by default; the job list is fetched only when it is opened */
 .side{position:fixed;z-index:6;bottom:0;inset-inline:0;background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;max-height:calc(76vh - env(safe-area-inset-top,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
 .side-h{position:relative;display:flex;align-items:center;gap:8px;padding:10px 16px 6px 12px;flex:none}
 .side-h::before{content:"";position:absolute;top:5px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--sunk)}
@@ -179,10 +179,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 .side .iconbtn{width:34px;height:34px}
 .side .iconbtn .i{width:16px;height:16px}
 @media(min-width:900px){
-  .side{top:0;bottom:0;inset-inline:auto 0;width:var(--panel);max-height:none;border-radius:0;box-shadow:none;border-inline-start:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
-  .side-h{padding:14px 16px 6px}.side-h::before{display:none}
-  .side-tog{cursor:default}.side-tog .chev{display:none}
-  .side-body{display:block;flex:1}
+  .side{inset-inline:auto var(--gut);width:440px;max-height:min(72vh,760px);border-radius:14px 14px 0 0;border:1px solid var(--line);border-bottom:0}
 }
 .jobs{display:flex;flex-direction:column;gap:0}
 .job{padding:12px 0;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
@@ -311,7 +308,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
         <button id="refresh" class="iconbtn" type="button" aria-label="רענון" title="רענון"><svg class="i"><use href="#i-refresh"/></svg></button>
       </div>
       <div class="side-body" id="sideBody">
-        <div id="jobs" class="jobs"><div class="empty">טוען…</div></div>
+        <div id="jobs" class="jobs"></div>
         <p class="foot">ההורדה רצה בענן. סרטון בודד לוקח דקה או שתיים, פלייליסט או עונה לוקחים יותר. אפשר לסגור את הדף ולחזור אחר כך.<br>הקבצים נשמרים בדרייב בתיקיות YouTube, Kan ו-13. ‏MP3 יוצא תמיד באיכות הגבוהה ביותר.</p>
       </div>
     </aside>
@@ -327,7 +324,7 @@ async function api(path,opts={}){const r=await fetch(path,{credentials:'same-ori
  if(r.status===401&&path!=='/api/login'){showLogin();throw new Error(d.error||'צריך להתחבר')}if(!r.ok)throw new Error(d.error||('שגיאה '+r.status));return d}
 function say(t,k='info'){const m=$('msg');m.textContent=t;m.className='msg '+k;m.hidden=!t}
 function showLogin(){$('loginView').hidden=false;$('appView').hidden=true;$('logout').hidden=true;stopPoll();setTimeout(()=>$('pw').focus(),50)}
-function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logout').hidden=false;loadJobs()}
+function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logout').hidden=false}
 const isLink=v=>/https?:\/\/|(^|\s)(www\.|m\.)?(youtube\.com|youtu\.be|kan\.org\.il|13tv\.co\.il)\//i.test(v);
 
 // source words + options
@@ -476,12 +473,13 @@ async function loadInfo(v){const box=$('preview');
 // start a job
 async function start(url,format,playlist,label,btn){if(btn)btn.disabled=true;say('שולח…','info');
  try{const j=await api('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:url,options:{format,quality,playlist,max_items:maxItems}})});
-  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח. ההורדה מופיעה במגירה למטה ומתעדכנת לבד.','info');await loadJobs()}
+  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח. ההורדה מופיעה במגירה למטה ומתעדכנת לבד.','info')}
  catch(e){say(e.message,'err')}finally{if(btn)btn.disabled=false}}
 
-// the downloads drawer: collapsed to a bar on a phone (tap to open), always open on a wide screen
-function setSide(open){$('side').classList.toggle('open',open);$('sideToggle').setAttribute('aria-expanded',String(open))}
-$('sideToggle').addEventListener('click',()=>{if(window.innerWidth<900)setSide(!$('side').classList.contains('open'))});
+// the downloads drawer: collapsed to a bar by default; the list is fetched when it opens and polled only while it is open
+const sideOpen=()=>$('side').classList.contains('open');
+function setSide(open){$('side').classList.toggle('open',open);$('sideToggle').setAttribute('aria-expanded',String(open));if(open)loadJobs();else stopPoll()}
+$('sideToggle').addEventListener('click',()=>setSide(!sideOpen()));
 function sideSummary(jobs){const run=jobs.filter(j=>j.status!=='completed').length,ok=jobs.filter(j=>j.status==='completed'&&j.conclusion==='success').length;
  const p=[];if(run)p.push(`${run} בדרך`);if(ok)p.push(`${ok} מוכנות`);$('sideSum').textContent=p.join(' · ')||(jobs.length?'':'אין הורדות')}
 
@@ -539,10 +537,10 @@ async function loadJobs(){try{const{jobs}=await api('/api/jobs');const known=new
   for(const p of lastJobs)if(!known.has(p.id)&&p.status==='pending')jobs.unshift(p);lastJobs=jobs;
   await Promise.all(jobs.slice(0,8).map(async j=>{if(j.status==='completed'&&details[j.id]&&details[j.id].status==='completed')return;
    if(j.status==='completed'||j.status==='in_progress'){try{details[j.id]=await api('/api/jobs/'+j.id)}catch{}}}));
-  render(jobs);jobs.some(j=>j.status!=='completed')?startPoll():stopPoll()}
+  render(jobs);jobs.some(j=>j.status!=='completed')&&sideOpen()?startPoll():stopPoll()}
   catch(e){if(!/להתחבר/.test(e.message)){$('jobs').innerHTML=`<div class="msg err">${esc(e.message)}</div>`;$('sideSum').textContent=''}}}
 function startPoll(){if(!polling)polling=setInterval(loadJobs,9000)}function stopPoll(){clearInterval(polling);polling=null}
-$('refresh').onclick=loadJobs;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('appView').hidden)loadJobs()});
+$('refresh').onclick=loadJobs;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('appView').hidden&&sideOpen())loadJobs()});
 
 async function takeShared(){const q=new URLSearchParams(location.search);if(!q.has('share'))return;history.replaceState(null,'','/');
  if(q.get('share')==='text'){const t=q.get('text')||'';const m=t.match(/https?:\/\/\S+/);$('q').value=m?m[0]:t;$('q').dispatchEvent(new Event('input'))}}
