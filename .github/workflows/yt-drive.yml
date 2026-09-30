@@ -99,6 +99,28 @@ jobs:
       - name: Download
         run: |
           mkdir -p out
+          # Live progress for the site. yt-dlp prints one "PROGRESS <fields>" line every 2 s (templates in PROG); show()
+          # keeps the latest in progress.txt and passes everything else to the log as before. A background reporter
+          # copies that line every 5 s into the notes of the job's prerelease ("progress: ..."), which the Worker reads
+          # while the run is going; "Publish result" replaces those notes with the final ones. No release = no live
+          # progress, nothing else changes.
+          show() { while IFS= read -r l; do case "$l" in "PROGRESS "*) printf '%s\n' "${l#PROGRESS }" > progress.txt ;; *) printf '%s\n' "$l"; printf '%s\n' "$l" >> dl.log ;; esac; done; }
+          PROG=(--newline --progress-delta 2
+                --progress-template "download:PROGRESS dl|%(progress._percent_str)s|%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str)s|%(progress._total_bytes_estimate_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(info.playlist_index)s|%(info.playlist_count)s|%(info.vcodec)s|%(progress.fragment_index)s|%(progress.fragment_count)s"
+                --progress-template "postprocess:PROGRESS pp|%(progress.postprocessor)s|%(progress.status)s|%(info.playlist_index)s|%(info.playlist_count)s")
+          if [ -n "$JOB_ID" ]; then
+            rel=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="job-$JOB_ID" -f target_commitish="$GITHUB_SHA" \
+                    -f name="yt $JOB_ID" -F prerelease=true -f body="$(printf 'yt-drive [%s]\nsource: %s\nprogress: start\n' "$JOB_ID" "$INPUT")" --jq .id) \
+              && echo "$rel" > release.id || echo "could not create the job release up front: no live progress this time"
+            if [ -s release.id ]; then
+              ( last=; while sleep 5; do
+                  [ -f progress.txt ] || continue; cur=$(cat progress.txt); [ "$cur" != "$last" ] || continue; last=$cur
+                  gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$rel" -f body="$(printf 'yt-drive [%s]\nsource: %s\nprogress: %s\n' "$JOB_ID" "$INPUT" "$cur")" >/dev/null 2>&1 || true
+                done ) >/dev/null 2>&1 &
+              echo $! > reporter.pid
+              trap 'kill "$(cat reporter.pid)" 2>/dev/null || true' EXIT
+            fi
+          fi
           # Kan file name from the episode page. Unicode-aware on purpose: an ASCII-only filter (tr [:alnum:]) deletes
           # every Hebrew letter and left "_1.mp4" for "עלומים | פרק 1".
           cat > kan_name.py <<'PY'
@@ -243,7 +265,7 @@ jobs:
             echo "upload failed for: $rel (kept on the runner; the final copy step retries it)" >&2
           fi
           SH
-          COMMON=(--no-progress --embed-metadata --embed-thumbnail --windows-filenames --trim-filenames 120 --ignore-errors
+          COMMON=("${PROG[@]}" --embed-metadata --embed-thumbnail --windows-filenames --trim-filenames 120 --ignore-errors
                   --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"
                   --extractor-args "generic:impersonate")
           [ -n "$YT_COOKIES" ] && { printf '%s\n' "$YT_COOKIES" > cookies.txt; COMMON+=(--cookies cookies.txt); echo "using cookies"; }
@@ -297,7 +319,7 @@ jobs:
               for CLIENTS in "default" "web_embedded" "tv,mweb" "web_safari,android_vr"; do
                 echo "::group::try route=$ROUTE player_client=$CLIENTS"
                 set +e
-                yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" 2>&1 | tee -a dl.log
+                yt-dlp "${COMMON[@]}" "${PX[@]}" "${FMT[@]}" --extractor-args "youtube:player_client=$CLIENTS" "$INPUT" 2>&1 | show
                 rc=${PIPESTATUS[0]}
                 set -e
                 echo "::endgroup::"
@@ -326,9 +348,9 @@ jobs:
             echo "file name: ${target#out/}"
             set +e
             if [ "$FORMAT" = "audio" ]; then
-              yt-dlp --no-progress -f "ba/b" -x --audio-format mp3 --audio-quality 0 -o "$target.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log
+              yt-dlp "${PROG[@]}" -f "ba/b" -x --audio-format mp3 --audio-quality 0 -o "$target.%(ext)s" "$wrapped" 2>&1 | show
             else
-              yt-dlp --no-progress -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "$target.%(ext)s" "$wrapped" 2>&1 | tee -a dl.log
+              yt-dlp "${PROG[@]}" -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "$target.%(ext)s" "$wrapped" 2>&1 | show
             fi
             set -e
             prune_leftovers
@@ -359,9 +381,9 @@ jobs:
               echo "13: trying $via"
               set +e
               if [ "$FORMAT" = "audio" ]; then
-                yt-dlp --no-progress -f "wb/b" -x --audio-format mp3 --audio-quality 0 -o "$target.%(ext)s" "$url" 2>&1 | tee -a dl.log
+                yt-dlp "${PROG[@]}" -f "wb/b" -x --audio-format mp3 --audio-quality 0 -o "$target.%(ext)s" "$url" 2>&1 | show
               else
-                yt-dlp --no-progress -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "$target.%(ext)s" "$url" 2>&1 | tee -a dl.log
+                yt-dlp "${PROG[@]}" -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "$target.%(ext)s" "$url" 2>&1 | show
               fi
               set -e
               prune_leftovers
@@ -474,8 +496,15 @@ jobs:
           notes=$(mktemp)
           { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -n "$WARN" ]; then echo "warning: $WARN"; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
           files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
-          gh release create "job-$JOB_ID" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
-            --title "yt $JOB_ID" --notes-file "$notes" "${files[@]}"
+          [ -f reporter.pid ] && { kill "$(cat reporter.pid)" 2>/dev/null || true; }   # the live-progress reporter, if still up
+          if [ -s release.id ]; then
+            # the release already exists (created by Download for live progress): final notes replace the progress line
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$(cat release.id)" -F "body=@$notes" --jq .tag_name
+            [ ${#files[@]} -eq 0 ] || gh release upload "job-$JOB_ID" -R "$GITHUB_REPOSITORY" "${files[@]}"
+          else
+            gh release create "job-$JOB_ID" -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+              --title "yt $JOB_ID" --notes-file "$notes" "${files[@]}"
+          fi
 
       - name: Cleanup old files
         if: always()

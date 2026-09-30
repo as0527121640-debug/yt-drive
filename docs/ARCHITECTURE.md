@@ -42,7 +42,7 @@ Cloudflare Worker  GET /api/jobs/:id   the page polls it: step progress, then "s
 | `GET /api/library?source=kan\|c13` | the whole index of one channel {title, url, thumb, groups, count} for the library view; the page filters (as you type), groups (13: genre, Kan: section) and sorts (as on the site / A-Z) itself |
 | `GET /api/episodes?url=` (alias `/api/kan/episodes`) | Kan: a series (-> first season + season list) or season page parsed into episodes. 13: seasons (lowest..highest SeasonNumber) and one season's episodes (default the newest season; by episode number, or the latest 100 when a season has more). Both return {title, seasons, season, episodes:[{url, title, duration, thumb}], source} |
 | `POST /api/jobs` {input, options:{format, quality, playlist, max_items}} | validates the link (YouTube, Kan or 13; 13 links are rewritten to the canonical shape below), dispatches the workflow, returns the job id |
-| `GET /api/jobs`, `GET /api/jobs/:id` | recent runs (matched by run title `yt [<id>]: <input>`); one job: status, current step, and when done the `job-<id>` release notes + files |
+| `GET /api/jobs`, `GET /api/jobs/:id` | recent runs (matched by run title `yt [<id>]: <input>`); one job: status, current step, while the Download step runs `progress` (see below), and when done the `job-<id>` release notes + files |
 | `GET /api/files/:assetId` | 302 to a short-lived download URL of a release asset (only used when Drive is off) |
 | `POST /share` | PWA share-target fallback |
 
@@ -70,8 +70,22 @@ Inputs: `input` (URL), `format` video|audio, `quality` best|1080|720|480 (defaul
      runner disk never holds a whole playlist / season and a timeout keeps what already finished.
 4. **Deliver** - Drive (rclone remote `gdrive`) or, without Drive, one release asset (several files -> one zip).
 5. **Publish result** - prerelease `job-<id>`: notes with source, format, `delivered:`, optional `reason:` / `warning:` and
-   the `files:` list.
+   the `files:` list. (The release already exists since the Download step - see live progress - so its notes are
+   replaced and the files uploaded; it is created here only if that early creation failed.)
 6. **Cleanup** - `job-*` releases older than 14 days are deleted.
+
+### Live download progress
+The runner has no channel to the Worker except GitHub itself, so the `job-<id>` prerelease doubles as a mailbox:
+- The Download step creates it at once (notes `progress: start`). yt-dlp runs with `--newline --progress-delta 2` and
+  `--progress-template` (arrays `PROG` in the workflow) and prints one `PROGRESS dl|...` / `PROGRESS pp|...` line every
+  2 s; the `show()` filter keeps the latest in `progress.txt` and sends everything else to the console and `dl.log` as
+  before. A background loop patches the release notes every 5 s when the line changed (~1 API call / 5 s, GITHUB_TOKEN).
+- `GET /api/jobs/:id` reads those notes while the current step is `Download` and returns `progress`:
+  `{kind:"download", percent, downloaded, total, speed, eta, item, items, stream:"video"|"audio", fragment, fragments}`
+  (nulls for what yt-dlp does not know; a merged video download runs twice, video then audio),
+  `{kind:"post", postprocessor:"ExtractAudio"|"FFmpegMerger"|"Metadata"|"EmbedThumbnail"|"MoveFiles"...}` or `{kind:"start"}`.
+- The page shows a bar + "45% · 12.3MB מתוך 27MB · 2.1MB/s · עוד 00:07 · פריט 2 מתוך 3" under the job while it downloads.
+- If the early release creation fails the run goes on without live progress; the final notes are written the old way.
 
 ## Where files land in Drive (folder vars in parentheses)
 ```

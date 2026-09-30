@@ -5,7 +5,7 @@
 //   GET  /api/kan/search, /api/c13/search, /api/library?source=kan|c13, /api/episodes?url= - Kan / Reshet 13
 //        series search and whole-library browsing (daily indexes in data/), episode lists
 //   POST /api/jobs   {input, options:{format}}          - dispatch yt-drive.yml with the video URL
-//   GET  /api/jobs / GET /api/jobs/:id                  - recent jobs + one job's status/result
+//   GET  /api/jobs / GET /api/jobs/:id                  - recent jobs + one job's status/result (+ live download progress)
 //   GET  /api/files/:assetId                            - download a result file (when Drive is off)
 //   POST /share                                         - PWA share target
 // Worker secrets: APP_PASSWORD, GH_TOKEN (fine-grained: Actions RW + Contents RW on GH_REPO), YT_API_KEY.
@@ -469,6 +469,25 @@ function runSummary(run) {
     created_at: run.created_at, run_url: run.html_url, run_id: run.id };
 }
 async function listJobs(env) { const runs = await recentRuns(env, 30); return json({ jobs: runs.map(runSummary).filter(j => j.id) }); }
+// The "progress: ..." line the Download step writes into the release notes every few seconds (fields as in the
+// workflow's PROG templates; yt-dlp prints NA / N/A / Unknown for what it does not know):
+//   dl|<percent>|<downloaded>|<total>|<total estimate>|<speed>|<eta>|<item>|<items>|<vcodec>|<fragment>|<fragments>
+//   pp|<postprocessor>|started|finished|<item>|<items>        start
+function parseProgress(body) {
+  const m = body.match(/^progress: (.*)$/m);
+  if (!m) return null;
+  const f = m[1].split('|').map(s => s.trim());
+  const str = s => (s && !/^(NA|N\/A%?|Unknown.*)$/.test(s)) ? s.replace(/iB\b/, 'B') : null;   // "12.34MiB" -> "12.34MB"
+  const num = s => { const n = parseInt(s, 10); return Number.isFinite(n) ? n : null; };
+  if (f[0] === 'dl') {
+    const pct = parseFloat(f[1]);
+    return { kind: 'download', percent: Number.isFinite(pct) ? pct : null, downloaded: str(f[2]), total: str(f[3]) || str(f[4]),
+      speed: str(f[5]), eta: str(f[6]), item: num(f[7]), items: num(f[8]),
+      stream: f[9] === 'none' ? 'audio' : (str(f[9]) ? 'video' : null), fragment: num(f[10]), fragments: num(f[11]) };
+  }
+  if (f[0] === 'pp') return { kind: 'post', postprocessor: f[1] || '', item: num(f[3]), items: num(f[4]) };
+  return { kind: f[0] || 'start' };
+}
 async function jobStatus(env, id) {
   const runs = await recentRuns(env, 50);
   const run = runs.find(r => (r.display_title || '').startsWith(`yt [${id}]`));
@@ -479,6 +498,10 @@ async function jobStatus(env, id) {
     const steps = (jobs.jobs && jobs.jobs[0] && jobs.jobs[0].steps) || [];
     const cur = steps.find(s => s.status === 'in_progress') || steps.filter(s => s.status === 'completed').pop();
     out.step = cur ? cur.name : null; out.steps_done = steps.filter(s => s.status === 'completed').length; out.steps_total = steps.length;
+    if (out.step === 'Download') {                         // live progress: the workflow keeps it in the job's release notes
+      const r = await gh(env, `/repos/${env.GH_REPO}/releases/tags/job-${id}`);
+      if (r.ok) out.progress = parseProgress(((await r.json()).body) || '');
+    }
     return json(out);
   }
   const r = await gh(env, `/repos/${env.GH_REPO}/releases/tags/job-${id}`);
