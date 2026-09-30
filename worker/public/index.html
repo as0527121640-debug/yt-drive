@@ -7,209 +7,216 @@
 <meta name="description" content="מחפשים ביוטיוב, בכאן או ב-13, והווידאו או ה-MP3 נשמרים בגוגל דרייב">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#eef0f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b0e15" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0a0a0a">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karantina:wght@400;700&family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;900&display=swap">
 <style>
-/* Layout: one phone-first column. The search field is the page; results sit under it as a list,
-   and every download is tracked like a parcel along a four-stop route: sent, downloading, to Drive, done. */
+/* Layout: a TV screen. Always dark, almost no frames: the sources are a row of bold words, the search is a single
+   line, the library is Netflix-style poster rails (one per genre), and the downloads live in a drawer that slides up
+   from the bottom on a phone and is a fixed side panel on a wide screen. White is the only accent; green and red are
+   reserved for done / failed. */
 :root{
-  --bg:#eef0f5;--surface:#ffffff;--sunk:#e4e8ef;--ink:#0f131b;--muted:#586173;--line:#d5dbe5;
-  --accent:#2447d8;--accent-ink:#ffffff;--accent-soft:#e1e7fc;
-  --audio:#a75f00;--audio-soft:#fbeed8;
-  --ok:#157347;--ok-soft:#daf1e4;--bad:#b42318;--bad-soft:#fbe3e0;--warn:#8a5a00;--warn-soft:#faefcf;
-  --scrim:rgba(8,11,18,.78);--on-scrim:#ffffff;
-  --shadow:0 1px 2px rgba(15,19,27,.05),0 10px 30px -12px rgba(15,19,27,.18);
-  --display:"Karantina","IBM Plex Sans Hebrew",system-ui,sans-serif;
-  --body:"IBM Plex Sans Hebrew",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
-  --mono:"IBM Plex Mono","IBM Plex Sans Hebrew",ui-monospace,monospace;
-  --r:14px;
-  color-scheme:light;
+  --bg:#0a0a0a;--surface:#161616;--sunk:#262626;--ink:#ffffff;--muted:#8d8d8d;--line:#2c2c2c;
+  --ok:#3ddc84;--ok-soft:#10301e;--bad:#ff6b6b;--bad-soft:#3a1515;--warn:#ffd166;--warn-soft:#3a3018;
+  --font:"Heebo",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --gut:clamp(16px,4vw,32px);--panel:380px;--bar:60px;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0b0e15;--surface:#131823;--sunk:#1b2130;--ink:#e9edf4;--muted:#8f99ad;--line:#262e3f;
-  --accent:#7f9bff;--accent-ink:#0a1033;--accent-soft:#1a2452;
-  --audio:#f2ab3c;--audio-soft:#34250c;
-  --ok:#55d394;--ok-soft:#11301f;--bad:#ff7b70;--bad-soft:#3a1714;--warn:#e9bd55;--warn-soft:#31290f;
-  --scrim:rgba(0,0,0,.72);--on-scrim:#ffffff;
-  --shadow:0 0 0 1px rgba(255,255,255,.02),0 12px 30px -14px rgba(0,0,0,.7);
-  color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0b0e15;--surface:#131823;--sunk:#1b2130;--ink:#e9edf4;--muted:#8f99ad;--line:#262e3f;
-  --accent:#7f9bff;--accent-ink:#0a1033;--accent-soft:#1a2452;
-  --audio:#f2ab3c;--audio-soft:#34250c;
-  --ok:#55d394;--ok-soft:#11301f;--bad:#ff7b70;--bad-soft:#3a1714;--warn:#e9bd55;--warn-soft:#31290f;
-  --scrim:rgba(0,0,0,.72);--on-scrim:#ffffff;
-  --shadow:0 0 0 1px rgba(255,255,255,.02),0 12px 30px -14px rgba(0,0,0,.7);
-  color-scheme:dark}
-
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+*,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none!important}
-img{max-width:100%}
+html{height:100%}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font);-webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0px)}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.wrap{max-width:760px;margin:0 auto;padding-block:max(14px,env(safe-area-inset-top,0px)) 64px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
-.wrap>*{min-width:0}
+button:disabled{cursor:default}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+img{max-width:100%;display:block}
+h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
+.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.noscroll{scrollbar-width:none}.noscroll::-webkit-scrollbar{display:none}
 
-/* top bar */
-.top{display:flex;align-items:center;gap:12px}
-.brand{display:flex;align-items:baseline;gap:10px;flex:1;min-width:0}
-.brand b{font:700 46px/.8 var(--display);letter-spacing:.01em}
-.brand b em{font-style:normal;color:var(--accent)}
-.brand span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
-.iconbtn:hover{color:var(--ink)}
+.wrap{padding-inline:var(--gut);padding-block:8px calc(var(--bar) + 28px + env(safe-area-inset-bottom,0px))}
+@media(min-width:900px){.wrap{padding-inline-end:calc(var(--panel) + var(--gut));padding-block:12px 48px;max-width:calc(960px + var(--panel))}}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 14px}
+.brand b{font-weight:900;font-size:34px;line-height:1;letter-spacing:-.03em}
+.brand b em{font-style:normal;color:var(--muted)}
+.brand span{display:none}
+.iconbtn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--ink);display:grid;place-items:center;padding:0}
+.iconbtn:hover{border-color:var(--ink)}
 
 /* login */
-.login{background:var(--surface);border-radius:20px;box-shadow:var(--shadow);padding:22px;display:flex;flex-direction:column;gap:12px;max-width:420px;width:100%;margin:8vh auto 0}
-.login h1{font:700 40px/.9 var(--display);margin:0}
-.login p{margin:0 0 6px;color:var(--muted);font-size:14px}
+.login{max-width:400px;margin:8vh auto 0;display:flex;flex-direction:column;gap:12px}
+.login h1{font-size:34px}
+.login p{margin:0;color:var(--muted)}
+.hint{font-size:13px;font-weight:500;color:var(--muted);margin:0}
 
-/* composer */
-.composer{background:var(--surface);border-radius:20px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-2px -2px 0;padding:0 2px}
-.tabs button{border:0;background:none;padding:8px 12px 10px;font-weight:600;font-size:15px;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px}
-.tabs button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--accent)}
-.searchrow{display:flex;gap:8px}
-.inbox{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:var(--sunk);border-radius:var(--r);padding:0 12px;border:1.5px solid transparent}
-.inbox:focus-within{border-color:var(--accent);background:var(--surface)}
-.inbox svg{color:var(--muted)}
-.inbox input{flex:1;min-width:0;width:100%;border:0;background:none;outline:none;padding:13px 0;font-size:16px}
-.inbox input::placeholder{color:var(--muted)}
-.inbox input::-webkit-search-cancel-button{display:none}
-.clear{border:0;background:none;color:var(--muted);padding:6px;display:grid;place-items:center}
-.btn{border:0;border-radius:var(--r);min-height:48px;padding:0 18px;font-weight:600;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s ease,filter .12s ease}
-.btn:active{transform:scale(.98)}
-.btn:disabled{opacity:.5;cursor:default;transform:none}
-.btn.primary{background:var(--accent);color:var(--accent-ink)}
-.btn.primary:hover{filter:brightness(1.07)}
-.opts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.opt{display:inline-flex;align-items:center;gap:6px;background:var(--sunk);border-radius:999px;padding:0 4px 0 12px;font-size:13px;color:var(--muted);min-height:34px}
-.opt select{border:0;background:var(--surface);border-radius:999px;padding:5px 10px;font:500 13px/1.2 var(--mono);color:var(--ink);cursor:pointer}
-.hint{font-size:12.5px;color:var(--muted);margin:0}
+/* fields, buttons */
+.field{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);min-height:56px}
+.field:focus-within{border-color:var(--ink)}
+.field input{flex:1;min-width:0;border:0;background:none;outline:0;padding:0;font-size:22px;font-weight:500}
+.field input::placeholder{color:var(--muted);font-weight:400}
+.field input::-webkit-search-cancel-button{display:none}
+.field .clear{border:0;background:var(--sunk);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;padding:0;color:var(--ink)}
+.field .clear .i{width:14px;height:14px}
+.field>.i{color:var(--muted)}
+.login .field{border:1px solid var(--line);border-radius:8px;padding-inline:12px;min-height:50px}.login .field input{font-size:17px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:6px;border:1px solid transparent;font-weight:900;font-size:15px;background:var(--sunk);color:var(--ink);white-space:nowrap}
+.btn.primary,.btn.go-v{background:var(--ink);color:#000}
+.btn.go-a{background:none;border-color:var(--ink);color:var(--ink)}
+.btn:disabled{opacity:.5}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:6px;border:1px solid transparent;font-weight:900;font-size:13px;background:var(--sunk);color:var(--ink);white-space:nowrap}
+.chip.go-v{background:var(--ink);color:#000}
+.chip.go-a{background:none;border-color:var(--ink);color:var(--ink)}
+.chip:disabled{opacity:.5}
+.chip .i{width:15px;height:15px}
+.msg{padding:10px 14px;border-radius:6px;font-size:14px;font-weight:500;line-height:1.4}
+.msg.info{background:var(--surface);color:var(--ink)}
+.msg.err{background:var(--bad-soft);color:var(--bad)}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-inline-end-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{color:var(--muted);padding:18px 0;font-size:15px}
+
+/* columns */
+.col{display:flex;flex-direction:column;gap:22px;min-width:0}
+
+/* composer: source words + search line + options */
+.composer{display:flex;flex-direction:column;gap:10px}
+.keys{display:flex;gap:22px;overflow-x:auto;padding:0 2px}
+.keys button{border:0;background:none;padding:6px 0;border-radius:0;font-size:20px;font-weight:900;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.keys button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+.searchrow{display:flex;gap:0}
+.searchrow .field{flex:1;min-width:0}
+.searchrow .btn{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;font-size:17px;padding:0 4px 0 12px;min-height:56px}
+.searchrow .field:focus-within+.btn{border-color:var(--ink)}
+.opts{display:flex;gap:16px;flex-wrap:wrap}
+.opt{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--muted)}
+.opt select{border:0;background:var(--sunk);color:var(--ink);border-radius:999px;padding:4px 10px;font-size:13px;font-weight:900;outline-offset:1px}
 
 /* link preview */
-.preview{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:start;background:var(--sunk);border-radius:var(--r);padding:10px}
-.preview>img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:9px;display:block;background:var(--line)}
-.preview.poster>img{aspect-ratio:2/3;width:88px}
-.preview.poster{grid-template-columns:88px 1fr}
-.pv{min-width:0;display:flex;flex-direction:column;gap:6px}
-.preview.err{display:block;background:var(--bad-soft);color:var(--bad);font-size:14px}
-.check{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;cursor:pointer}
-.check input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent);flex:none}
+.preview{display:grid;grid-template-columns:128px minmax(0,1fr);gap:14px;background:var(--surface);border-radius:10px;padding:12px;align-items:start}
+.preview img{width:128px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;background:var(--sunk)}
+.preview.poster{grid-template-columns:96px minmax(0,1fr)}
+.preview.poster img{width:96px;aspect-ratio:2/3}
+.preview.err{display:block;color:var(--bad);font-weight:500;background:var(--bad-soft)}
+.pv{display:flex;flex-direction:column;gap:8px;min-width:0}
+.pv .ttl{font-weight:900;font-size:16px;line-height:1.3}
+.pv .sub{font-size:13px;color:var(--muted)}
+.check{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.4}
+.check input{accent-color:var(--ink);width:18px;height:18px;margin:2px 0 0;flex:none}
 .pair{display:flex;gap:8px;flex-wrap:wrap}
-.pair .btn{flex:1 1 120px;min-height:42px;font-size:14px}
-.go-v{background:var(--accent-soft);color:var(--accent)}
-.go-a{background:var(--audio-soft);color:var(--audio)}
-.go-v:hover,.go-a:hover{filter:brightness(.97)}
-@media (max-width:440px){.preview{grid-template-columns:1fr}.preview>img{max-width:100%}.preview.poster{grid-template-columns:88px 1fr}}
+@media(max-width:420px){.preview{grid-template-columns:1fr}.preview img{width:100%}.preview.poster{grid-template-columns:96px minmax(0,1fr)}.preview.poster img{width:96px}.pair .btn{flex:1}}
 
-/* messages */
-.msg{border-radius:12px;padding:10px 12px;font-size:14px}
-.msg.err{background:var(--bad-soft);color:var(--bad)}
-.msg.info{background:var(--accent-soft);color:var(--ink)}
-.empty{color:var(--muted);font-size:14px;text-align:center;padding:26px 12px}
-
-/* results: a list of rows */
-.results{display:flex;flex-direction:column;gap:2px}
-.row{display:grid;grid-template-columns:168px 1fr;gap:14px;padding:10px;border-radius:var(--r);align-items:start}
-.row:hover{background:var(--surface)}
-.thumb{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--sunk);max-width:100%}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb .spec{position:absolute;bottom:6px;inset-inline-start:6px;background:var(--scrim);color:var(--on-scrim);font:500 11.5px/1 var(--mono);padding:4px 6px;border-radius:6px}
-.row.pl .thumb{box-shadow:-5px -5px 0 -1px var(--line),-10px -10px 0 -2px var(--sunk);margin-top:10px;margin-inline-end:10px;overflow:visible}
-.row.pl .thumb img{border-radius:10px}
-.info{min-width:0;display:flex;flex-direction:column;gap:4px}
-.ttl{font-weight:600;font-size:15px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
-.sub{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
-.chip{border:0;border-radius:10px;min-height:36px;padding:0 12px;font-weight:600;font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
-.chip:disabled{opacity:.5;cursor:default}
-.chip svg.i{width:16px;height:16px}
-@media (max-width:520px){.row{grid-template-columns:128px 1fr;gap:12px;padding:8px}.ttl{font-size:14px}.acts .chip{padding:0 10px}}
-
-/* library of a channel: header, group chips, poster grid */
-.lib{display:flex;flex-direction:column;gap:12px}
-.lib>*,.kview>*{min-width:0}
-#appView{margin:0;width:100%}
-.lib-head{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
-.lib-head h2{font:700 34px/.9 var(--display);margin:0;flex:1;min-width:0}
-.lib-head h2 small{display:block;font:500 13px/1.4 var(--body);color:var(--muted);margin-top:6px}
-.seasons button .c{font:500 11.5px/1 var(--mono);opacity:.7;margin-inline-start:5px}
-.poster-card .sub{font-size:12px}
-/* Kan: series posters */
-.posters{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:16px 12px}
-.poster-card{border:0;background:none;padding:0;text-align:start;display:flex;flex-direction:column;gap:8px}
-.poster-card .art{aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:var(--sunk);max-width:100%;transition:transform .15s ease}
-.poster-card:hover .art{transform:translateY(-2px)}
-.poster-card img{width:100%;height:100%;object-fit:cover;display:block}
-.poster-card .ttl{font-size:14px}
-
-/* Kan: episodes */
-.kview{display:flex;flex-direction:column;gap:12px}
+/* section heads */
+.lib-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.lib-head h2,.khead h2{font-size:22px}
+.lib-head h2 small{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:2px;line-height:1.4}
+.lib,.kview{display:flex;flex-direction:column;gap:14px}
 .khead{display:flex;align-items:center;gap:10px}
-.khead h2{font:700 34px/.95 var(--display);margin:0;flex:1;min-width:0;text-wrap:balance}
-.seasons{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
-.seasons button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:13.5px;white-space:nowrap;color:var(--muted)}
-.seasons button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
-.eps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.ep{display:grid;grid-template-columns:28px 112px 1fr auto;gap:12px;align-items:center;padding:8px;border-radius:12px}
-.ep:hover{background:var(--surface)}
-.ep .n{font:500 13px/1 var(--mono);color:var(--muted);text-align:center}
-.ep img,.ep .ph{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--sunk);display:block}
-.ep .acts{margin:0;flex-wrap:nowrap}
-.ep .chip{min-height:40px;width:44px;padding:0;justify-content:center}
-.ep .chip .lbl{display:none}
-@media (max-width:520px){.ep{grid-template-columns:22px 88px 1fr;row-gap:8px}.ep img,.ep .ph{width:88px}.ep .acts{grid-column:2/-1}.ep .chip{flex:1;width:auto}.ep .chip .lbl{display:inline}}
+.khead .iconbtn{flex:none}
 
-/* downloads */
-.sec-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.sec-h h2{font:700 34px/.9 var(--display);margin:0}
-.jobs{display:flex;flex-direction:column;gap:10px}
-.job{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
-.jtop{display:flex;gap:10px;align-items:flex-start}
-.jtop .info{flex:1}
-.jtop .ttl{-webkit-line-clamp:2;font-size:14.5px}
-.tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.tag{font:500 11.5px/1 var(--mono);padding:4px 7px;border-radius:6px;background:var(--sunk);color:var(--muted)}
-.when{font-size:12px;color:var(--muted)}
-.pill{font-weight:600;font-size:12px;padding:5px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
-.p-run{background:var(--warn-soft);color:var(--warn)}.p-ok{background:var(--ok-soft);color:var(--ok)}.p-bad{background:var(--bad-soft);color:var(--bad)}.p-wait{background:var(--sunk);color:var(--muted)}
+/* filter chips: seasons, genres */
+.seasons{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-inline:calc(-1 * var(--gut));padding-inline:var(--gut)}
+.seasons button{border:1px solid var(--line);background:none;color:var(--muted);border-radius:999px;min-height:32px;padding:0 12px;font-size:13px;font-weight:900;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.seasons button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#000}
+.seasons .c{font-weight:500;opacity:.7;font-variant-numeric:tabular-nums}
 
-/* the route: sent -> downloading -> to Drive -> done */
-.route{display:grid;grid-template-columns:repeat(4,1fr);position:relative;padding-top:2px}
-.route::before{content:"";position:absolute;top:8px;inset-inline:12.5%;height:2px;background:var(--line)}
-.route .fill{position:absolute;top:8px;inset-inline-start:12.5%;height:2px;background:var(--accent);transition:width .5s ease}
-.stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted);text-align:center}
-.stop i{width:14px;height:14px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:block;margin-top:1px}
-.stop.done i{background:var(--accent);border-color:var(--accent)}
-.stop.now i{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);animation:pulse 1.4s ease-in-out infinite}
-.stop.now{color:var(--ink);font-weight:600}
-.stop.fail i{background:var(--bad);border-color:var(--bad)}
-.stop.fail{color:var(--bad);font-weight:600}
-.job.ok .stop.done:last-child i{background:var(--ok);border-color:var(--ok)}
-@keyframes pulse{50%{box-shadow:0 0 0 7px transparent}}
-.why{font-size:13.5px;color:var(--bad);background:var(--bad-soft);border-radius:10px;padding:8px 10px}
-.warn{font-size:13px;color:var(--warn);background:var(--warn-soft);border-radius:10px;padding:8px 10px}
-.jact{display:flex;gap:8px;flex-wrap:wrap}
-.jact a,.jact .saved{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;border-radius:11px;min-height:42px;padding:0 14px;font-weight:600;font-size:14px}
-a.dl{background:var(--accent);color:var(--accent-ink)}
-a.lnk{background:var(--sunk);color:var(--ink);flex:0 0 auto}
-.saved{background:var(--ok-soft);color:var(--ok)}
-details.sum summary{cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none}
-details.sum summary::-webkit-details-marker{display:none}
-details.sum pre{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 var(--mono);background:var(--sunk);border-radius:10px;padding:10px;margin:8px 0 0;max-height:220px;overflow:auto}
-.foot{color:var(--muted);font-size:12.5px;line-height:1.8;margin:0}
+/* results: video rows */
+.results{display:flex;flex-direction:column;gap:0}
+.row{display:grid;grid-template-columns:136px minmax(0,1fr);gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:4px;overflow:hidden;background:var(--sunk)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.spec{position:absolute;inset-inline-end:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;font-size:11px;font-weight:900;padding:2px 6px;border-radius:4px;font-variant-numeric:tabular-nums}
+.row.pl .thumb::after{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:26%;background:rgba(0,0,0,.55)}
+.row .info{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ttl{font-weight:500;font-size:15px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.sub{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+@media(max-width:420px){.row{grid-template-columns:112px minmax(0,1fr)}}
 
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
-@media (prefers-reduced-motion:reduce){.spin,.stop.now i{animation:none}.btn,.poster-card .art,.route .fill{transition:none}}
+/* posters: horizontal rails (one per genre) or a wrapping grid when filtered */
+.rails{display:flex;flex-direction:column;gap:20px}
+.rail{display:flex;flex-direction:column;gap:8px;min-width:0}
+.rail h3{font-size:16px;display:flex;gap:8px;align-items:baseline}
+.rail h3 span{color:var(--muted);font-weight:400;font-size:13px;font-variant-numeric:tabular-nums}
+.posters{display:flex;gap:10px;overflow-x:auto;margin-inline:calc(-1 * var(--gut));padding-inline:var(--gut);padding-bottom:6px;scroll-snap-type:x proximity;scroll-padding-inline:var(--gut)}
+.poster-card{flex:0 0 128px;scroll-snap-align:start;border:0;background:none;padding:0;text-align:start;display:flex;flex-direction:column;gap:6px;min-width:0}
+.poster-card .art{aspect-ratio:2/3;border-radius:6px;overflow:hidden;background:var(--sunk);max-width:100%;transition:transform .15s ease}
+.poster-card .art img{width:100%;height:100%;object-fit:cover}
+.poster-card:hover .art{transform:scale(1.03)}
+.poster-card .ttl{font-size:13px;-webkit-line-clamp:1}
+.poster-card .sub{font-size:12px}
+.posters.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:16px 10px;overflow:visible;margin:0;padding:0}
+.posters.grid .poster-card{flex:auto}
+@media(prefers-reduced-motion:reduce){.poster-card .art{transition:none}.poster-card:hover .art{transform:none}}
+
+/* episodes */
+.kview .pair .btn{flex:1}
+.eps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.ep{display:grid;grid-template-columns:auto 112px minmax(0,1fr);gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.ep .n{font-size:15px;font-weight:900;color:var(--muted);min-width:22px;text-align:center;font-variant-numeric:tabular-nums}
+.ep img,.ep .ph{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:4px;background:var(--sunk);display:block}
+.ep .info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ep .acts{grid-column:1/-1;margin-top:0}
+@media(min-width:560px){.ep{grid-template-columns:auto 112px minmax(0,1fr) auto}.ep .acts{grid-column:auto}.ep .acts .lbl{display:none}.ep .acts .chip{padding:0 10px}}
+@media(max-width:420px){.ep{grid-template-columns:auto 88px minmax(0,1fr)}.ep img,.ep .ph{width:88px}}
+.kview .hint{line-height:1.45}
+
+/* the downloads drawer (phone) / side panel (wide) */
+.side{position:fixed;z-index:6;bottom:0;inset-inline:0;background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;max-height:calc(76vh - env(safe-area-inset-top,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
+.side-h{position:relative;display:flex;align-items:center;gap:8px;padding:10px 16px 6px 12px;flex:none}
+.side-h::before{content:"";position:absolute;top:5px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--sunk)}
+.side-tog{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;padding:6px 0;text-align:start}
+.side-tog h2{font-size:18px;white-space:nowrap}
+.side-tog .sum-txt{font-size:13px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.side-tog .chev{margin-inline-start:auto;transition:transform .2s}
+.side.open .side-tog .chev{transform:rotate(180deg)}
+.side-body{display:none;overflow:auto;overscroll-behavior:contain;padding:0 16px 16px}
+.side.open .side-body{display:block}
+.side .iconbtn{width:34px;height:34px}
+.side .iconbtn .i{width:16px;height:16px}
+@media(min-width:900px){
+  .side{top:0;bottom:0;inset-inline:auto 0;width:var(--panel);max-height:none;border-radius:0;box-shadow:none;border-inline-start:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+  .side-h{padding:14px 16px 6px}.side-h::before{display:none}
+  .side-tog{cursor:default}.side-tog .chev{display:none}
+  .side-body{display:block;flex:1}
+}
+.jobs{display:flex;flex-direction:column;gap:0}
+.job{padding:12px 0;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
+.job:first-child{border-top:0}
+.jtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.jtop .info{display:flex;flex-direction:column;gap:5px;min-width:0}
+.job .ttl{font-size:14px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+.tag{background:var(--sunk);color:var(--muted);font-weight:900;padding:1px 6px;border-radius:4px;font-variant-numeric:tabular-nums}
+.when{color:var(--muted);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:900;padding:3px 10px;border-radius:999px;white-space:nowrap;flex:none;border:1px solid var(--line);color:var(--muted)}
+.pill .i{width:14px;height:14px}
+.p-run{color:var(--ink);border-color:var(--ink)}
+.p-ok{color:var(--ok);border-color:var(--ok)}
+.p-bad{color:var(--bad);border-color:var(--bad)}
+.meter{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;height:3px}
+.meter i{display:block;background:var(--sunk)}
+.meter i.done{background:var(--ink)}
+.meter i.now{background:var(--ink);animation:blink 1.2s ease-in-out infinite}
+.meter i.fail{background:var(--bad)}
+.job.ok .meter i.done{background:var(--ok)}
+@keyframes blink{50%{opacity:.3}}
+@media(prefers-reduced-motion:reduce){.meter i.now{animation:none;opacity:.7}}
+.why{font-size:13px;color:var(--bad);font-weight:500;line-height:1.4}
+.warn{font-size:13px;color:var(--warn);background:var(--warn-soft);padding:8px 10px;border-radius:6px;line-height:1.4}
+.jact{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.saved{display:inline-flex;align-items:center;gap:6px;color:var(--ok);font-weight:900;font-size:13px}
+.saved .i{width:16px;height:16px}
+.dl{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#000;text-decoration:none;font-weight:900;font-size:13px;min-height:34px;padding:0 12px;border-radius:6px}
+.lnk{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-weight:500;font-size:13px;margin-inline-start:auto}
+.lnk:hover{color:var(--ink)}
+.sum summary{font-size:13px;color:var(--muted);font-weight:500;cursor:pointer}
+.sum pre{margin:8px 0 0;background:var(--bg);padding:10px;border-radius:6px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;direction:ltr;text-align:left;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.foot{margin:14px 0 0;font-size:12px;color:var(--muted);line-height:1.55;border-top:1px solid var(--line);padding-top:12px}
 </style>
 </head>
 <body>
@@ -225,6 +232,7 @@ details.sum pre{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
 </svg>
 <div class="wrap">
   <header class="top">
@@ -234,72 +242,79 @@ details.sum pre{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5
 
   <section id="loginView" class="login" hidden>
     <h1>כניסה</h1>
-    <p>האתר פרטי. הסיסמה נשמרת במכשיר הזה ל-30 יום.</p>
+    <p>מחפשים ביוטיוב, בכאן או ב-13, והקובץ נשמר בגוגל דרייב. האתר פרטי, והסיסמה נשמרת במכשיר הזה ל-30 יום.</p>
     <label for="pw" class="hint">סיסמה</label>
-    <div class="inbox"><input id="pw" type="password" autocomplete="current-password" enterkeyhint="go"></div>
+    <div class="field"><input id="pw" type="password" autocomplete="current-password" enterkeyhint="go"></div>
     <button id="loginBtn" class="btn primary" type="button">כניסה</button>
     <div id="loginMsg" class="msg err" hidden></div>
   </section>
 
-  <main id="appView" class="wrap" style="padding:0" hidden>
-    <section class="composer" aria-label="חיפוש">
-      <div class="tabs" role="group" aria-label="איפה לחפש" id="typeSeg">
-        <button type="button" data-type="video" aria-pressed="true">סרטונים</button>
-        <button type="button" data-type="playlist" aria-pressed="false">פלייליסטים</button>
-        <button type="button" data-type="kan" aria-pressed="false">כאן</button>
-        <button type="button" data-type="c13" aria-pressed="false">13</button>
-      </div>
-      <form id="searchForm" class="searchrow" autocomplete="off">
-        <div class="inbox">
-          <svg class="i"><use href="#i-search"/></svg>
-          <input id="q" type="search" size="1" placeholder="סרטון, או קישור" enterkeyhint="search" spellcheck="false" aria-label="חיפוש או קישור">
-          <button type="button" class="clear" id="clearQ" aria-label="ניקוי" hidden><svg class="i"><use href="#i-x"/></svg></button>
+  <main id="appView" hidden>
+    <div class="col">
+      <section class="composer" aria-label="חיפוש">
+        <div class="keys noscroll" role="group" aria-label="איפה לחפש" id="typeSeg">
+          <button type="button" data-type="video" aria-pressed="true">סרטונים</button>
+          <button type="button" data-type="playlist" aria-pressed="false">פלייליסטים</button>
+          <button type="button" data-type="kan" aria-pressed="false">כאן</button>
+          <button type="button" data-type="c13" aria-pressed="false">13</button>
         </div>
-        <button class="btn primary" id="searchBtn" type="submit">חפש</button>
-      </form>
-      <div class="opts">
-        <label class="opt" for="qualSel">איכות וידאו
-          <select id="qualSel"><option value="best">מיטבית</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select>
-        </label>
-        <label class="opt" for="maxSel">פריטים מרשימה
-          <select id="maxSel"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
-        </label>
-      </div>
-      <div id="preview" class="preview" hidden></div>
-      <div id="msg" class="msg info" hidden></div>
-    </section>
+        <form id="searchForm" class="searchrow" autocomplete="off">
+          <div class="field">
+            <svg class="i"><use href="#i-search"/></svg>
+            <input id="q" type="search" size="1" placeholder="סרטון, או קישור" enterkeyhint="search" spellcheck="false" aria-label="חיפוש או קישור">
+            <button type="button" class="clear" id="clearQ" aria-label="ניקוי" hidden><svg class="i"><use href="#i-x"/></svg></button>
+          </div>
+          <button class="btn" id="searchBtn" type="submit">חפש</button>
+        </form>
+        <div class="opts">
+          <label class="opt" for="qualSel">איכות וידאו
+            <select id="qualSel"><option value="best">מיטבית</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select>
+          </label>
+          <label class="opt" for="maxSel">פריטים מרשימה
+            <select id="maxSel"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
+          </label>
+        </div>
+        <div id="preview" class="preview" hidden></div>
+        <div id="msg" class="msg info" hidden></div>
+      </section>
 
-    <section id="lib" class="lib" hidden>
-      <div class="lib-head"><h2 id="libTitle"></h2>
-        <label class="opt" for="libSort">סדר
-          <select id="libSort"><option value="site">כמו באתר</option><option value="az">א–ת</option></select>
-        </label>
-      </div>
-      <div id="libChips" class="seasons" role="group" aria-label="סינון לפי סוג" hidden></div>
-      <div id="libGrid" class="posters"></div>
-      <div id="libEmpty" class="empty" hidden></div>
-    </section>
-    <section id="shelf" class="results" hidden></section>
-    <section id="kanView" class="kview" hidden>
-      <div class="khead">
-        <button type="button" id="kanBack" class="iconbtn" aria-label="חזרה לתוצאות" title="חזרה לתוצאות"><svg class="i"><use href="#i-back"/></svg></button>
-        <h2 id="kanTitle"></h2>
-      </div>
-      <div id="kanSeasons" class="seasons" role="group" aria-label="עונות" hidden></div>
-      <div class="pair" id="kanAll" hidden>
-        <button type="button" class="btn go-v" data-kanall="video"><svg class="i"><use href="#i-video"/></svg>כל העונה בווידאו</button>
-        <button type="button" class="btn go-a" data-kanall="audio"><svg class="i"><use href="#i-audio"/></svg>כל העונה ב-MP3</button>
-      </div>
-      <p class="hint" id="kanNote" hidden></p>
-      <ul id="kanEps" class="eps"></ul>
-    </section>
-    <div id="searchEmpty" class="empty" hidden></div>
+      <section id="lib" class="lib" hidden>
+        <div class="lib-head"><h2 id="libTitle"></h2>
+          <label class="opt" for="libSort">סדר
+            <select id="libSort"><option value="site">כמו באתר</option><option value="az">א–ת</option></select>
+          </label>
+        </div>
+        <div id="libChips" class="seasons noscroll" role="group" aria-label="סינון לפי סוג" hidden></div>
+        <div id="libGrid" class="rails"></div>
+        <div id="libEmpty" class="empty" hidden></div>
+      </section>
+      <section id="shelf" class="results" hidden></section>
+      <section id="kanView" class="kview" hidden>
+        <div class="khead">
+          <button type="button" id="kanBack" class="iconbtn" aria-label="חזרה לתוצאות" title="חזרה לתוצאות"><svg class="i"><use href="#i-back"/></svg></button>
+          <h2 id="kanTitle"></h2>
+        </div>
+        <div id="kanSeasons" class="seasons noscroll" role="group" aria-label="עונות" hidden></div>
+        <div class="pair" id="kanAll" hidden>
+          <button type="button" class="btn go-v" data-kanall="video"><svg class="i"><use href="#i-video"/></svg>כל העונה בווידאו</button>
+          <button type="button" class="btn go-a" data-kanall="audio"><svg class="i"><use href="#i-audio"/></svg>כל העונה ב-MP3</button>
+        </div>
+        <p class="hint" id="kanNote" hidden></p>
+        <ul id="kanEps" class="eps"></ul>
+      </section>
+      <div id="searchEmpty" class="empty" hidden></div>
+    </div>
 
-    <section class="jobs-sec" style="display:flex;flex-direction:column;gap:12px">
-      <div class="sec-h"><h2>ההורדות שלי</h2><button id="refresh" class="iconbtn" type="button" aria-label="רענון" title="רענון"><svg class="i"><use href="#i-refresh"/></svg></button></div>
-      <div id="jobs" class="jobs"><div class="empty">טוען…</div></div>
-    </section>
-    <p class="foot">ההורדה רצה בענן. סרטון בודד לוקח דקה או שתיים, פלייליסט או עונה לוקחים יותר. אפשר לסגור את הדף ולחזור אחר כך.<br>הקבצים נשמרים בדרייב בתיקיות YouTube, Kan ו-13. ‏MP3 יוצא תמיד באיכות הגבוהה ביותר.</p>
+    <aside class="side" id="side">
+      <div class="side-h">
+        <button type="button" class="side-tog" id="sideToggle" aria-expanded="false" aria-controls="sideBody"><h2>ההורדות שלי</h2><span class="sum-txt" id="sideSum"></span><svg class="i chev"><use href="#i-up"/></svg></button>
+        <button id="refresh" class="iconbtn" type="button" aria-label="רענון" title="רענון"><svg class="i"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="side-body" id="sideBody">
+        <div id="jobs" class="jobs"><div class="empty">טוען…</div></div>
+        <p class="foot">ההורדה רצה בענן. סרטון בודד לוקח דקה או שתיים, פלייליסט או עונה לוקחים יותר. אפשר לסגור את הדף ולחזור אחר כך.<br>הקבצים נשמרים בדרייב בתיקיות YouTube, Kan ו-13. ‏MP3 יוצא תמיד באיכות הגבוהה ביותר.</p>
+      </div>
+    </aside>
   </main>
 </div>
 <script>
@@ -315,13 +330,13 @@ function showLogin(){$('loginView').hidden=false;$('appView').hidden=true;$('log
 function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logout').hidden=false;loadJobs()}
 const isLink=v=>/https?:\/\/|(^|\s)(www\.|m\.)?(youtube\.com|youtu\.be|kan\.org\.il|13tv\.co\.il)\//i.test(v);
 
-// tabs + options
+// source words + options
 function paint(){document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.type===searchType));
  $('qualSel').value=quality;$('maxSel').value=String(maxItems);
  $('q').placeholder=searchType==='kan'?'סינון סדרות בכאן, או קישור':searchType==='c13'?'סינון סדרות ב-13, או קישור':(!canSearch?'הדבקת קישור של יוטיוב או כאן':(searchType==='playlist'?'פלייליסט, או קישור':'סרטון, או קישור'))}
 $('typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;searchType=b.dataset.type;store.set('ytType',searchType);paint();
  const v=$('q').value.trim();if(isLib()){showLibrary();return}$('lib').hidden=true;$('kanView').hidden=true;
- if(v&&!isLink(v))$('searchForm').requestSubmit();else $('shelf').hidden=$('shelf').innerHTML===''||$('shelf').className==='posters'});
+ if(v&&!isLink(v))$('searchForm').requestSubmit();else $('shelf').hidden=$('shelf').innerHTML===''||/posters/.test($('shelf').className)});
 $('qualSel').addEventListener('change',()=>{quality=$('qualSel').value;store.set('ytQuality',quality)});
 $('maxSel').addEventListener('change',()=>{maxItems=parseInt($('maxSel').value,10)||50;store.set('ytMax',String(maxItems));if(pasted)showPreview(pasted);if(kanState)renderKan(kanState)});
 
@@ -346,11 +361,11 @@ $('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$
  try{const u=searchType==='kan'?'/api/kan/search?q=':searchType==='c13'?'/api/c13/search?q=':`/api/search?type=${searchType}&q=`;const{items}=await api(u+encodeURIComponent(q));renderShelf(items||[])}
  catch(err){say(err.message,'err')}finally{b.disabled=false;b.textContent='חפש'}});
 
+const posterCard=x=>`<button type="button" class="poster-card" data-kan="${esc(x.url)}" data-title="${esc(x.title)}">
+  <div class="art">${x.thumb?`<img loading="lazy" src="${esc(x.thumb)}" alt="">`:''}</div><div class="ttl">${esc(x.title)}</div>${x.count?`<div class="sub">${x.count} פרקים</div>`:''}</button>`;
 function renderShelf(items){const box=$('shelf');
  if(!items.length){$('searchEmpty').textContent='לא נמצאו תוצאות. נסה מילה אחרת, או הדבק קישור.';$('searchEmpty').hidden=false;box.hidden=true;return}
- if(items[0].kind==='kan'||items[0].kind==='series'){box.className='posters';
-  box.innerHTML=items.map(v=>`<button type="button" class="poster-card" data-kan="${esc(v.url)}" data-title="${esc(v.title)}">
-   <div class="art">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}</div><div class="ttl">${esc(v.title)}</div></button>`).join('')}
+ if(items[0].kind==='kan'||items[0].kind==='series'){box.className='posters grid';box.innerHTML=items.map(posterCard).join('')}
  else{box.className='results';
   box.innerHTML=items.map(v=>{const pl=v.kind==='playlist';const lbl=esc(v.title);
    const spec=pl?(v.count!=null?`${v.count} סרטונים`:'פלייליסט'):v.duration;
@@ -365,13 +380,13 @@ function renderShelf(items){const box=$('shelf');
 $('shelf').addEventListener('click',e=>{const k=e.target.closest('[data-kan]');if(k){openKan(k.dataset.kan,k.dataset.title);return}
  const b=e.target.closest('button[data-url]');if(b)start(b.dataset.url,b.dataset.fmt,b.dataset.pl,b.dataset.label,b)});
 
-// the whole library of Kan / 13 (daily indexes): filtered live by the field, grouped by chips, sorted
+// the whole library of Kan / 13 (daily indexes): one poster rail per genre; a wrapping grid once filtered by the field or a chip
 const isLib=()=>searchType==='kan'||searchType==='c13';
 const LIBNAME={kan:'כאן',c13:'13'};
-const normHe=s=>String(s||'').normalize('NFKD').replace(/[\u0591-\u05C7]/g,'').toLowerCase().replace(/["'׳״`.,:;!?()\-–_/\\]/g,' ').replace(/\s+/g,' ').trim();
+const normHe=s=>String(s||'').normalize('NFKD').replace(/[֑-ׇ]/g,'').toLowerCase().replace(/["'׳״`.,:;!?()\-–_/\\]/g,' ').replace(/\s+/g,' ').trim();
 const lib={};let libGroup='',libSort=store.get('libSort','site');
 async function showLibrary(){const src=searchType;$('shelf').hidden=true;$('searchEmpty').hidden=true;$('kanView').hidden=true;$('lib').hidden=false;
- if(!lib[src]){$('libTitle').textContent='הספרייה של '+LIBNAME[src];$('libChips').hidden=true;$('libEmpty').hidden=true;$('libGrid').innerHTML='<div class="empty">טוען את הספרייה…</div>';
+ if(!lib[src]){$('libTitle').textContent='הספרייה של '+LIBNAME[src];$('libChips').hidden=true;$('libEmpty').hidden=true;$('libGrid').className='rails';$('libGrid').innerHTML='<div class="empty">טוען את הספרייה…</div>';
   try{const d=await api('/api/library?source='+src);d.items.forEach((x,i)=>{x.n=normHe(x.title);x.i=i});lib[src]=d}
   catch(e){$('libGrid').innerHTML=`<div class="msg err">${esc(e.message)}</div>`;return}
   if(searchType!==src)return}
@@ -384,14 +399,17 @@ function renderLib(){const src=searchType,d=lib[src];if(!d)return;
  $('libChips').hidden=gl.length<2;
  $('libChips').innerHTML=`<button type="button" data-g="" aria-pressed="${!libGroup}">הכל<span class="c">${hit.length}</span></button>`+
   gl.map(([g,n])=>`<button type="button" data-g="${esc(g)}" aria-pressed="${g===libGroup}">${esc(g)}<span class="c">${n}</span></button>`).join('');
- const shown=libGroup?hit.filter(x=>(x.groups||[]).includes(libGroup)):hit.slice();
- if(libSort==='az')shown.sort((a,b)=>a.title.localeCompare(b.title,'he'));else shown.sort((a,b)=>a.i-b.i);
+ const order=a=>libSort==='az'?a.sort((x,y)=>x.title.localeCompare(y.title,'he')):a.sort((x,y)=>x.i-y.i);
  $('libSort').value=libSort;
  const upd=d.updated?` · עודכן ${new Date(d.updated).toLocaleDateString('he-IL')}`:'';
- $('libTitle').innerHTML=`הספרייה של ${LIBNAME[src]}<small>${words.length||libGroup?`${shown.length} מתוך ${d.items.length} סדרות`:`${d.items.length} סדרות`}${esc(upd)}</small>`;
- $('libEmpty').hidden=!!shown.length;$('libEmpty').textContent='אין סדרה בשם הזה. נסה מילה אחרת.';
- $('libGrid').innerHTML=shown.map(x=>`<button type="button" class="poster-card" data-kan="${esc(x.url)}" data-title="${esc(x.title)}">
-  <div class="art">${x.thumb?`<img loading="lazy" src="${esc(x.thumb)}" alt="">`:''}</div><div class="ttl">${esc(x.title)}</div>${x.count?`<div class="sub">${x.count} פרקים</div>`:''}</button>`).join('')}
+ const filtered=words.length||libGroup;
+ const shown=order(libGroup?hit.filter(x=>(x.groups||[]).includes(libGroup)):hit.slice());
+ $('libTitle').innerHTML=`הספרייה של ${LIBNAME[src]}<small>${filtered?`${shown.length} מתוך ${d.items.length} סדרות`:`${d.items.length} סדרות`}${esc(upd)}</small>`;
+ $('libEmpty').textContent='אין סדרה בשם הזה. נסה מילה אחרת.';
+ const box=$('libGrid');
+ if(!filtered&&gl.length>1){box.className='rails';$('libEmpty').hidden=true;
+  box.innerHTML=gl.map(([g,n])=>`<section class="rail"><h3>${esc(g)}<span>${n}</span></h3><div class="posters noscroll">${order(hit.filter(x=>(x.groups||[]).includes(g))).map(posterCard).join('')}</div></section>`).join('');return}
+ box.className='posters grid';$('libEmpty').hidden=!!shown.length;box.innerHTML=shown.map(posterCard).join('')}
 $('libChips').addEventListener('click',e=>{const b=e.target.closest('button[data-g]');if(!b)return;libGroup=b.dataset.g;renderLib()});
 $('libSort').addEventListener('change',()=>{libSort=$('libSort').value;store.set('libSort',libSort);renderLib()});
 $('libGrid').addEventListener('click',e=>{const k=e.target.closest('[data-kan]');if(k)openKan(k.dataset.kan,k.dataset.title)});
@@ -445,7 +463,7 @@ function showPreview(d){const box=$('preview');if(!d){box.hidden=true;return}
   <div class="pair">
    <button type="button" class="btn go-v" data-paste="video">${ico('video')}${all?'הכל בווידאו':'וידאו'}</button>
    <button type="button" class="btn go-a" data-paste="audio">${ico('audio')}${all?'הכל ב-MP3':'MP3'}</button>
-   ${kanList?`<button type="button" class="btn go-v" data-pick="1">${ico('list')}בחירת פרקים</button>`:''}
+   ${kanList?`<button type="button" class="btn" data-pick="1">${ico('list')}בחירת פרקים</button>`:''}
   </div></div>`;
  box.hidden=false}
 $('preview').addEventListener('click',e=>{const p=e.target.closest('button[data-pick]');if(p&&pasted){openKan(pasted.url,pasted.title);return}
@@ -458,17 +476,20 @@ async function loadInfo(v){const box=$('preview');
 // start a job
 async function start(url,format,playlist,label,btn){if(btn)btn.disabled=true;say('שולח…','info');
  try{const j=await api('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:url,options:{format,quality,playlist,max_items:maxItems}})});
-  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח. ההורדה מופיעה למטה ומתעדכנת לבד.','info');await loadJobs()}
+  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח. ההורדה מופיעה במגירה למטה ומתעדכנת לבד.','info');await loadJobs()}
  catch(e){say(e.message,'err')}finally{if(btn)btn.disabled=false}}
+
+// the downloads drawer: collapsed to a bar on a phone (tap to open), always open on a wide screen
+function setSide(open){$('side').classList.toggle('open',open);$('sideToggle').setAttribute('aria-expanded',String(open))}
+$('sideToggle').addEventListener('click',()=>{if(window.innerWidth<900)setSide(!$('side').classList.contains('open'))});
+function sideSummary(jobs){const run=jobs.filter(j=>j.status!=='completed').length,ok=jobs.filter(j=>j.status==='completed'&&j.conclusion==='success').length;
+ const p=[];if(run)p.push(`${run} בדרך`);if(ok)p.push(`${ok} מוכנות`);$('sideSum').textContent=p.join(' · ')||(jobs.length?'':'אין הורדות')}
 
 // downloads
 function metaAll(){try{return JSON.parse(store.get('ytJobs','{}'))}catch{return{}}}
 function remember(id,m){const all=metaAll();all[id]=m;store.set('ytJobs',JSON.stringify(all));
- lastJobs.unshift({id,input:m.label,status:'pending',created_at:new Date().toISOString()});render(lastJobs);startPoll()}
+ lastJobs.unshift({id,input:m.label,status:'pending',created_at:new Date().toISOString()});render(lastJobs);setSide(true);startPoll()}
 function ago(iso){const s=(Date.now()-new Date(iso))/1000;if(s<60)return'עכשיו';if(s<3600)return`לפני ${Math.round(s/60)} דק׳`;if(s<86400)return`לפני ${Math.round(s/3600)} שע׳`;return new Date(iso).toLocaleDateString('he-IL')}
-function pill(j){if(j.status==='pending'||j.status==='queued')return'<span class="pill p-wait"><span class="spin"></span>בתור</span>';
- if(j.status!=='completed')return'<span class="pill p-run"><span class="spin"></span>בדרך</span>';
- if(j.conclusion==='success')return`<span class="pill p-ok">${ico('check')}מוכן</span>`;if(j.conclusion==='cancelled')return'<span class="pill p-bad">בוטל</span>';return'<span class="pill p-bad">נכשל</span>'}
 function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
  if(/not made this video available in your country|not available in your country/i.test(r))return'הסרטון חסום מחוץ לישראל, והשרת שמוריד נמצא בחו"ל.';
  if(/could not find the Kan stream|no stream found/i.test(r))return'לא נמצא וידאו בדף הזה של כאן. בדרך כלל זה דף שאינו פרק, למשל כתבה.';
@@ -483,23 +504,27 @@ function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
  if(/live event|premiere|is not currently live|will begin/i.test(r))return'זה שידור חי או בכורה שעוד לא הסתיימו.';
  if(/unavailable|removed|terminated/i.test(r))return'הסרטון לא זמין: הוסר, נחסם או מוגבל.';
  return r?('ההורדה נכשלה: '+r):'ההורדה נכשלה. הסיבה מופיעה ב"פרטים".'}
-// which stop of the route a job is at: 0 sent, 1 downloading, 2 to Drive, 3 done
+// which stage a job is at: 0 sent, 1 downloading, 2 to Drive, 3 done
 const DELIVER_STEPS=/^(Deliver|Publish result|Cleanup old files|Post |Complete job)/;
 function stopOf(j,d){if(j.status==='pending'||j.status==='queued')return 0;
  if(j.status!=='completed')return d.step&&DELIVER_STEPS.test(d.step)?2:1;
  if(j.conclusion==='success')return 3;
  return /delivered: FAILED/.test(d.summary||'')&&/^files:\n\s+\S/m.test(d.summary||'')?2:1}
-function route(j,d,drive){const at=stopOf(j,d),failed=j.status==='completed'&&j.conclusion!=='success';
- const names=['נשלח','מוריד',drive===false?'מכין קובץ':'לדרייב','מוכן'];
- const pct=Math.min(at,3)/3*75;
- return `<div class="route" aria-label="מצב: ${names[at]}"><span class="fill" style="width:${failed?Math.max(0,at-1)/3*75:pct}%"></span>${names.map((n,i)=>{
+const STAGE=['בתור','מוריד','שומר בדרייב','מוכן'];
+function pill(j,d,drive){const at=stopOf(j,d);
+ if(j.status!=='completed')return`<span class="pill p-run"><span class="spin"></span>${at===2&&drive===false?'מכין קובץ':STAGE[at]}</span>`;
+ if(j.conclusion==='success')return`<span class="pill p-ok">${ico('check')}מוכן</span>`;
+ return`<span class="pill p-bad">${j.conclusion==='cancelled'?'בוטל':'נכשל'}</span>`}
+function meter(j,d){const at=stopOf(j,d),failed=j.status==='completed'&&j.conclusion!=='success';
+ return `<div class="meter" aria-hidden="true">${[0,1,2,3].map(i=>{
   const c=failed?(i<at?'done':i===at?'fail':''):(i<at||at===3?'done':i===at?'now':'');
-  return `<div class="stop ${c}"><i></i>${n}</div>`}).join('')}</div>`}
-function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div class="empty">עוד אין הורדות. חפש סרטון למעלה, או הדבק קישור.</div>';return}const M=metaAll();
+  return `<i class="${c}"></i>`}).join('')}</div>`}
+function render(jobs){const box=$('jobs');const M=metaAll();sideSummary(jobs);
+ if(!jobs.length){box.innerHTML='<div class="empty">עוד אין הורדות. חפש סרטון, או הדבק קישור.</div>';return}
  box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const m=M[j.id]||{};const src=m.label||j.input||'';let body='';
   const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('רשימה'+(m.max?` · עד ${m.max}`:''));
   const drive=/Google Drive/i.test(d.summary||'')?true:(d.summary?false:null);
-  body+=route(j,d,drive);
+  body+=meter(j,d);
   if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
    if(j.conclusion!=='success'&&!f)body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
    if(/^warning: /m.test(d.summary||''))body+='<div class="warn">חלק מהפריטים לא ירדו: פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.</div>';
@@ -509,13 +534,13 @@ function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div c
    body+=`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}פרטים</a></div>`;
    if(d.summary)body+=`<details class="sum"><summary>סיכום טכני</summary><pre>${esc(d.summary)}</pre></details>`}
   return `<article class="job${j.conclusion==='success'?' ok':''}"><div class="jtop"><div class="info"><div class="ttl">${esc(src)}</div>
-   <div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="when">${ago(j.created_at)}</span></div></div>${pill(j)}</div>${body}</article>`}).join('')}
+   <div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="when">${ago(j.created_at)}</span></div></div>${pill(j,d,drive)}</div>${body}</article>`}).join('')}
 async function loadJobs(){try{const{jobs}=await api('/api/jobs');const known=new Set(jobs.map(j=>j.id));
   for(const p of lastJobs)if(!known.has(p.id)&&p.status==='pending')jobs.unshift(p);lastJobs=jobs;
   await Promise.all(jobs.slice(0,8).map(async j=>{if(j.status==='completed'&&details[j.id]&&details[j.id].status==='completed')return;
    if(j.status==='completed'||j.status==='in_progress'){try{details[j.id]=await api('/api/jobs/'+j.id)}catch{}}}));
   render(jobs);jobs.some(j=>j.status!=='completed')?startPoll():stopPoll()}
-  catch(e){if(!/להתחבר/.test(e.message))$('jobs').innerHTML=`<div class="msg err">${esc(e.message)}</div>`}}
+  catch(e){if(!/להתחבר/.test(e.message)){$('jobs').innerHTML=`<div class="msg err">${esc(e.message)}</div>`;$('sideSum').textContent=''}}}
 function startPoll(){if(!polling)polling=setInterval(loadJobs,9000)}function stopPoll(){clearInterval(polling);polling=null}
 $('refresh').onclick=loadJobs;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('appView').hidden)loadJobs()});
 

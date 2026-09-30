@@ -29,7 +29,7 @@
 - **13 video** (only 13 audio ran in the cloud) and a **whole 13 series** link (season by season; tested locally with
   `c13_list.py` only). The **13 tab clicked through on the live site** (tested locally at phone width).
 - The **library view** (Kan / 13 tabs) on the live site - tested locally on the real indexes at phone width.
-- The **redesigned page on the live site** (tested locally at phone width, light and dark; job cards only with example data).
+- The **redesigned page ("TV" look, 2026-09-30) on the live site**: tested locally at phone and desktop width on the real 13 / Kan indexes and episode lists; the downloads drawer and job cards only with example data (the local dev server has no GitHub token). Not tested in the field: the drawer on a real phone with the keyboard open, and the rails with the Kan index (only 13 was clicked through).
 - Failure paths: a playlist with removed / private items (the "some items failed" warning), Kan season with a failing
   episode.
 

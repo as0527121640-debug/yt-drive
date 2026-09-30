@@ -9,7 +9,7 @@ device. Runs entirely on free tiers; nothing runs (or costs) while idle. Persona
 - **Kan:** search the catalogue by series name, browse seasons and episodes, download one episode or a whole season.
   Kan streams are licensed for Israel, so they are fetched through a small relay that runs in Cloudflare's Tel Aviv data
   center.
-- **Site:** Hebrew, right-to-left, phone-first, light / dark, installable (PWA) with an Android "Share" target, live job
+- **Site:** Hebrew, right-to-left, phone-first, dark "TV screen" look, installable (PWA) with an Android "Share" target, live job
   progress, password protected.
 
 ## How it works
