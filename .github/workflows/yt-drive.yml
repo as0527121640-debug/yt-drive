@@ -106,8 +106,8 @@ jobs:
           # progress, nothing else changes.
           show() { while IFS= read -r l; do case "$l" in "PROGRESS "*) printf '%s\n' "${l#PROGRESS }" > progress.txt ;; *) printf '%s\n' "$l"; printf '%s\n' "$l" >> dl.log ;; esac; done; }
           PROG=(--newline --progress-delta 2
-                --progress-template "download:PROGRESS dl|%(progress._percent_str)s|%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str)s|%(progress._total_bytes_estimate_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(info.playlist_index)s|%(info.playlist_count)s|%(info.vcodec)s|%(progress.fragment_index)s|%(progress.fragment_count)s"
-                --progress-template "postprocess:PROGRESS pp|%(progress.postprocessor)s|%(progress.status)s|%(info.playlist_index)s|%(info.playlist_count)s")
+                --progress-template "download:PROGRESS dl|%(progress._percent_str)s|%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str)s|%(progress._total_bytes_estimate_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(info.playlist_autonumber)s|%(info.n_entries)s|%(info.vcodec)s|%(progress.fragment_index)s|%(progress.fragment_count)s"
+                --progress-template "postprocess:PROGRESS pp|%(progress.postprocessor)s|%(progress.status)s|%(info.playlist_autonumber)s|%(info.n_entries)s")
           if [ -n "$JOB_ID" ]; then
             rel=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="job-$JOB_ID" -f target_commitish="$GITHUB_SHA" \
                     -f name="yt $JOB_ID" -F prerelease=true -f body="$(printf 'yt-drive [%s]\nsource: %s\nprogress: start\n' "$JOB_ID" "$INPUT")" --jq .id) \

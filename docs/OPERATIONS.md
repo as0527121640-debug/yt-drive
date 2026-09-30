@@ -56,6 +56,7 @@ RCLONE_CONF_BASE64 -R ...` (Git Bash - a PowerShell pipe adds `\r\n`), delete th
 ```
 gh workflow run yt-drive.yml -R as0527121640-debug/yt-drive -f input=<url> -f format=audio -f playlist=yes -f max_items=3 -f job_id=test0001
 gh release view job-test0001 -R as0527121640-debug/yt-drive --json body --jq .body     # source / delivered / files
+gh release view job-test0001 -R as0527121640-debug/yt-drive --json body --jq .body | grep ^progress:   # while it runs: live progress line
 ```
 A good result says `delivered: Google Drive / <folder> (N file(s))` and lists real media names (no `.webp`).
 
