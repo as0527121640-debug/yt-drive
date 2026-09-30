@@ -146,7 +146,7 @@ function normKanUrl(raw) {        // https, no query/hash, trailing slash (the s
 }
 // The daily catalogue indexes (data/*.json, built by the kan-index workflow), cached per isolate for 30 minutes.
 // Kan: section s (kan-11 / kan-actual ...). 13: genres g, catalogue date d, full-episode count n.
-const KAN_SECTIONS = { 'kan-11': 'כאן 11', 'kan-actual': 'אקטואליה' };
+const KAN_SECTIONS = { 'kan-11': 'כאן 11', 'kan-actual': 'אקטואליה', 'eurovision-2023': 'אירוויזיון' };
 const indexes = {};
 async function loadIndex(env, source) {
   const c = indexes[source];
