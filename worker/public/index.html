@@ -201,6 +201,10 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 .meter i.now{background:var(--ink);animation:blink 1.2s ease-in-out infinite}
 .meter i.fail{background:var(--bad)}
 .job.ok .meter i.done{background:var(--ok)}
+.prog{display:flex;flex-direction:column;gap:5px}
+.prog .bar{height:3px;background:var(--sunk)}
+.prog .bar i{display:block;height:100%;background:var(--ink);transition:width .6s ease}
+.prog .ptxt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @keyframes blink{50%{opacity:.3}}
 @media(prefers-reduced-motion:reduce){.meter i.now{animation:none;opacity:.7}}
 .why{font-size:13px;color:var(--bad);font-weight:500;line-height:1.4}
@@ -517,12 +521,25 @@ function meter(j,d){const at=stopOf(j,d),failed=j.status==='completed'&&j.conclu
  return `<div class="meter" aria-hidden="true">${[0,1,2,3].map(i=>{
   const c=failed?(i<at?'done':i===at?'fail':''):(i<at||at===3?'done':i===at?'now':'');
   return `<i class="${c}"></i>`}).join('')}</div>`}
+// live progress under the meter while the Download step runs (d.progress from /api/jobs/:id, refreshed every poll)
+const PP={ExtractAudio:'ממיר ל-MP3',FFmpegMerger:'מחבר וידאו ושמע',Merger:'מחבר וידאו ושמע',Metadata:'מוסיף פרטים לקובץ',EmbedThumbnail:'מוסיף תמונה לקובץ',EmbedSubtitle:'מוסיף כתוביות',MoveFiles:'מסיים את הקובץ',Exec:'שולח לדרייב'};
+function progressLine(p,m){const t=[];let pct=null;
+ if(p.kind==='download'){pct=p.percent==null?null:Math.round(p.percent);
+  if(pct!=null)t.push(pct+'%');else if(p.fragment&&p.fragments)t.push(`חלק ${p.fragment} מתוך ${p.fragments}`);
+  if(p.total)t.push(`${p.downloaded||'0'} מתוך ${p.total}`);else if(p.downloaded)t.push(p.downloaded);
+  if(p.speed)t.push(p.speed);if(p.eta)t.push('עוד '+p.eta);
+  if(m.format==='video'&&p.stream)t.push(p.stream==='audio'?'ערוץ השמע':'הווידאו')}
+ else if(p.kind==='post')t.push(PP[p.postprocessor]||'מעבד את הקובץ');
+ else t.push('מתחיל…');
+ if(p.items>1&&p.item)t.push(`פריט ${p.item} מתוך ${p.items}`);
+ return`<div class="prog">${pct!=null?`<div class="bar"><i style="width:${pct}%"></i></div>`:''}<div class="ptxt">${esc(t.join(' · '))}</div></div>`}
 function render(jobs){const box=$('jobs');const M=metaAll();sideSummary(jobs);
  if(!jobs.length){box.innerHTML='<div class="empty">עוד אין הורדות. חפש סרטון, או הדבק קישור.</div>';return}
  box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const m=M[j.id]||{};const src=m.label||j.input||'';let body='';
   const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('רשימה'+(m.max?` · עד ${m.max}`:''));
   const drive=/Google Drive/i.test(d.summary||'')?true:(d.summary?false:null);
   body+=meter(j,d);
+  if(j.status!=='completed'&&d.progress&&stopOf(j,d)===1)body+=progressLine(d.progress,m);
   if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
    if(j.conclusion!=='success'&&!f)body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
    if(/^warning: /m.test(d.summary||''))body+='<div class="warn">חלק מהפריטים לא ירדו: פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.</div>';
