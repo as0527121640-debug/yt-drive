@@ -31,6 +31,7 @@
   `c13_list.py` only). The **13 tab clicked through on the live site** (tested locally at phone width).
 - The **library view** (Kan / 13 tabs) on the live site - tested locally on the real indexes at phone width.
 - The **redesigned page ("TV" look, 2026-09-30) on the live site**: tested locally at phone and desktop width on the real 13 / Kan indexes and episode lists; the downloads drawer and job cards only with example data (the local dev server has no GitHub token). Not tested in the field: the drawer on a real phone with the keyboard open, and the rails with the Kan index (only 13 was clicked through).
+- The **rebuilt downloads panel (2026-10-01)**: side column opened from the header on a wide screen, bottom sheet on the phone, compact job rows with a "details" toggle. Tested locally at 1248 / 920 / 375 px with example jobs (running with percent, saving to Drive, queued, saved, saved with warning, failed, release file, cancelled) and real open / close clicks (header button, close button, Esc, bottom bar). Deployed; the live page serves the new code. Not seen yet with the real job list of the live site (needs the user's password).
 - Failure paths: a playlist with removed / private items (the "some items failed" warning), Kan season with a failing
   episode.
 - **Live progress** (2026-09-30): proved in the cloud on a 13 episode (percent, size, speed, ETA, then "ExtractAudio")

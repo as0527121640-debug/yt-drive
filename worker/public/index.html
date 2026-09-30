@@ -13,9 +13,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;900&display=swap">
 <style>
 /* Layout: a TV screen. Always dark, almost no frames: the sources are a row of bold words, the search is a single
-   line, the library is Netflix-style poster rails (one per genre), and the downloads live in a drawer that slides up
-   from the bottom (a bottom-corner panel on a wide screen) and is only fetched when opened. White is the only accent;
-   green and red are reserved for done / failed. */
+   line, the library is Netflix-style poster rails (one per genre), and the downloads live in a panel that is closed by
+   default and only fetched when opened (phone: a sheet that slides up from a bottom bar; wide screen: a side column
+   opened from the header). White is the only accent; green and red are reserved for done / failed. */
 :root{
   --bg:#0a0a0a;--surface:#161616;--sunk:#262626;--ink:#ffffff;--muted:#8d8d8d;--line:#2c2c2c;
   --ok:#3ddc84;--ok-soft:#10301e;--bad:#ff6b6b;--bad-soft:#3a1515;--warn:#ffd166;--warn-soft:#3a3018;
@@ -42,6 +42,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 
 /* header */
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 14px}
+.top-acts{display:flex;align-items:center;gap:10px}
 .brand b{font-weight:900;font-size:34px;line-height:1;letter-spacing:-.03em}
 .brand b em{font-style:normal;color:var(--muted)}
 .brand span{display:none}
@@ -165,58 +166,71 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 @media(max-width:420px){.ep{grid-template-columns:auto 88px minmax(0,1fr)}.ep img,.ep .ph{width:88px}}
 .kview .hint{line-height:1.45}
 
-/* the downloads drawer: collapsed to a bar by default; the job list is fetched only when it is opened */
+/* the downloads panel: closed by default; the job list is fetched only when it is opened.
+   Phone: a bar at the bottom that opens into a sheet. Wide screen: nothing floats over the posters - a button in the
+   header opens a column docked to the side, and the page makes room for it. */
 .side{position:fixed;z-index:6;bottom:0;inset-inline:0;background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;max-height:calc(76vh - env(safe-area-inset-top,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
 .side-h{position:relative;display:flex;align-items:center;gap:8px;padding:10px 16px 6px 12px;flex:none}
 .side-h::before{content:"";position:absolute;top:5px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--sunk)}
 .side-tog{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:none;padding:6px 0;text-align:start}
 .side-tog h2{font-size:18px;white-space:nowrap}
-.side-tog .sum-txt{font-size:13px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sum-txt{font-size:13px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .side-tog .chev{margin-inline-start:auto;transition:transform .2s}
 .side.open .side-tog .chev{transform:rotate(180deg)}
-.side-body{display:none;overflow:auto;overscroll-behavior:contain;padding:0 16px 16px}
+.side-body{display:none;overflow:auto;overscroll-behavior:contain;padding:0 16px 16px;scrollbar-width:thin;scrollbar-color:var(--sunk) transparent}
 .side.open .side-body{display:block}
 .side .iconbtn{width:34px;height:34px}
 .side .iconbtn .i{width:16px;height:16px}
+.side:not(.open) #refresh,.side-x,.dl-open{display:none}
 @media(min-width:900px){
-  .side{inset-inline:auto var(--gut);width:440px;max-height:min(72vh,760px);border-radius:14px 14px 0 0;border:1px solid var(--line);border-bottom:0}
+  .dl-open{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:none;font-weight:900;font-size:14px;white-space:nowrap}
+  .dl-open:hover{border-color:var(--ink)}
+  .dl-open[aria-expanded="true"]{border-color:var(--ink)}
+  .side{top:0;inset-inline:auto 0;width:var(--panel);max-height:none;border-radius:0;box-shadow:none;border-inline-start:1px solid var(--line);animation:dock .2s ease}
+  .side:not(.open){display:none}
+  .side-h{padding:18px 20px 10px}
+  .side-h::before,.side-tog .chev{display:none}
+  .side-tog{pointer-events:none}
+  .side-x{display:grid}
+  .side-body{padding:0 20px 20px}
+  body.docked .wrap{max-width:min(960px,calc(100% - var(--panel)))}
 }
-.jobs{display:flex;flex-direction:column;gap:0}
-.job{padding:12px 0;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
-.job:first-child{border-top:0}
-.jtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.jtop .info{display:flex;flex-direction:column;gap:5px;min-width:0}
-.job .ttl{font-size:14px}
-.tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
-.tag{background:var(--sunk);color:var(--muted);font-weight:900;padding:1px 6px;border-radius:4px;font-variant-numeric:tabular-nums}
-.when{color:var(--muted);font-weight:500}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:900;padding:3px 10px;border-radius:999px;white-space:nowrap;flex:none;border:1px solid var(--line);color:var(--muted)}
-.pill .i{width:14px;height:14px}
-.p-run{color:var(--ink);border-color:var(--ink)}
-.p-ok{color:var(--ok);border-color:var(--ok)}
-.p-bad{color:var(--bad);border-color:var(--bad)}
-.meter{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;height:3px}
-.meter i{display:block;background:var(--sunk)}
-.meter i.done{background:var(--ink)}
-.meter i.now{background:var(--ink);animation:blink 1.2s ease-in-out infinite}
-.meter i.fail{background:var(--bad)}
-.job.ok .meter i.done{background:var(--ok)}
-.prog{display:flex;flex-direction:column;gap:5px}
-.prog .bar{height:3px;background:var(--sunk)}
-.prog .bar i{display:block;height:100%;background:var(--ink);transition:width .6s ease}
-.prog .ptxt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@keyframes blink{50%{opacity:.3}}
-@media(prefers-reduced-motion:reduce){.meter i.now{animation:none;opacity:.7}}
-.why{font-size:13px;color:var(--bad);font-weight:500;line-height:1.4}
-.warn{font-size:13px;color:var(--warn);background:var(--warn-soft);padding:8px 10px;border-radius:6px;line-height:1.4}
-.jact{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.saved{display:inline-flex;align-items:center;gap:6px;color:var(--ok);font-weight:900;font-size:13px}
-.saved .i{width:16px;height:16px}
-.dl{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#000;text-decoration:none;font-weight:900;font-size:13px;min-height:34px;padding:0 12px;border-radius:6px}
-.lnk{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-weight:500;font-size:13px;margin-inline-start:auto}
+@keyframes dock{from{opacity:0;transform:translateX(-12px)}}
+/* one download: a status mark, the title, one quiet line of facts; only a running one grows a progress bar */
+.jobs{display:flex;flex-direction:column}
+.jgroup{font-size:12px;font-weight:900;color:var(--muted);padding:16px 0 4px}
+.jgroup:first-child{padding-top:4px}
+.job{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.job:first-child,.jgroup+.job{border-top:0}
+.jst{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);color:var(--muted)}
+.jst .i{width:15px;height:15px}
+.jst .spin{width:14px;height:14px;color:var(--ink)}
+.job.ok .jst{background:var(--ok-soft);color:var(--ok)}
+.job.bad .jst{background:var(--bad-soft);color:var(--bad)}
+.jmain{display:flex;flex-direction:column;gap:3px;min-width:0}
+.job .ttl{font-size:14px;text-align:right}
+.jsub{display:flex;align-items:baseline;gap:10px;font-size:12px;color:var(--muted)}
+.jsub .meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jsub .st-ok{color:var(--ok)}
+.jsub .st-bad{color:var(--bad)}
+.more{flex:none;border:0;background:none;padding:0;font-size:12px;font-weight:500;color:var(--muted);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line)}
+.more:hover,.more[aria-expanded="true"]{color:var(--ink)}
+.prog{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.prog .bar{height:4px;border-radius:2px;background:var(--sunk);overflow:hidden}
+.prog .bar i{display:block;height:100%;border-radius:2px;background:var(--ink);transition:width .6s ease}
+.prog .bar.ind i{width:35%;animation:slide 1.4s ease-in-out infinite}
+.prog .ptxt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.5}
+.prog .ptxt b{color:var(--ink);font-weight:900}
+@keyframes slide{from{margin-inline-start:-35%}to{margin-inline-start:100%}}
+@media(prefers-reduced-motion:reduce){.prog .bar.ind i{animation:none;opacity:.6}.side{animation:none}}
+.why{font-size:13px;color:var(--bad);font-weight:500;line-height:1.4;margin-top:3px}
+.warn{font-size:13px;color:var(--warn);background:var(--warn-soft);padding:8px 10px;border-radius:6px;line-height:1.4;margin-top:5px}
+.dl{display:inline-flex;align-self:flex-start;align-items:center;gap:6px;background:var(--ink);color:#000;text-decoration:none;font-weight:900;font-size:13px;min-height:34px;padding:0 12px;border-radius:6px;margin-top:6px}
+.jmore{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.jmore pre{margin:0;background:var(--bg);padding:10px;border-radius:6px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;direction:ltr;text-align:left;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.lnk{display:inline-flex;align-self:flex-start;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-weight:500;font-size:12px}
+.lnk .i{width:14px;height:14px}
 .lnk:hover{color:var(--ink)}
-.sum summary{font-size:13px;color:var(--muted);font-weight:500;cursor:pointer}
-.sum pre{margin:8px 0 0;background:var(--bg);padding:10px;border-radius:6px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;direction:ltr;text-align:left;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .foot{margin:14px 0 0;font-size:12px;color:var(--muted);line-height:1.55;border-top:1px solid var(--line);padding-top:12px}
 </style>
 </head>
@@ -234,11 +248,15 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></symbol>
 </svg>
 <div class="wrap">
   <header class="top">
     <div class="brand"><b>ל<em>דרייב</em></b><span>יוטיוב · כאן · 13 ← גוגל דרייב</span></div>
-    <button id="logout" class="iconbtn" type="button" aria-label="יציאה" title="יציאה" hidden><svg class="i"><use href="#i-out"/></svg></button>
+    <div class="top-acts">
+      <button id="dlOpen" class="dl-open" type="button" aria-expanded="false" aria-controls="side" hidden><svg class="i"><use href="#i-down"/></svg>ההורדות שלי<span class="sum-txt" id="dlSum"></span></button>
+      <button id="logout" class="iconbtn" type="button" aria-label="יציאה" title="יציאה" hidden><svg class="i"><use href="#i-out"/></svg></button>
+    </div>
   </header>
 
   <section id="loginView" class="login" hidden>
@@ -310,6 +328,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
       <div class="side-h">
         <button type="button" class="side-tog" id="sideToggle" aria-expanded="false" aria-controls="sideBody"><h2>ההורדות שלי</h2><span class="sum-txt" id="sideSum"></span><svg class="i chev"><use href="#i-up"/></svg></button>
         <button id="refresh" class="iconbtn" type="button" aria-label="רענון" title="רענון"><svg class="i"><use href="#i-refresh"/></svg></button>
+        <button id="sideClose" class="iconbtn side-x" type="button" aria-label="סגירה" title="סגירה"><svg class="i"><use href="#i-x"/></svg></button>
       </div>
       <div class="side-body" id="sideBody">
         <div id="jobs" class="jobs"></div>
@@ -327,8 +346,8 @@ const ico=n=>`<svg class="i"><use href="#i-${n}"/></svg>`;
 async function api(path,opts={}){const r=await fetch(path,{credentials:'same-origin',...opts});let d={};try{d=await r.json()}catch{}
  if(r.status===401&&path!=='/api/login'){showLogin();throw new Error(d.error||'צריך להתחבר')}if(!r.ok)throw new Error(d.error||('שגיאה '+r.status));return d}
 function say(t,k='info'){const m=$('msg');m.textContent=t;m.className='msg '+k;m.hidden=!t}
-function showLogin(){$('loginView').hidden=false;$('appView').hidden=true;$('logout').hidden=true;stopPoll();setTimeout(()=>$('pw').focus(),50)}
-function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logout').hidden=false}
+function showLogin(){$('loginView').hidden=false;$('appView').hidden=true;$('logout').hidden=true;$('dlOpen').hidden=true;setSide(false);setTimeout(()=>$('pw').focus(),50)}
+function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logout').hidden=false;$('dlOpen').hidden=false}
 const isLink=v=>/https?:\/\/|(^|\s)(www\.|m\.)?(youtube\.com|youtu\.be|kan\.org\.il|13tv\.co\.il)\//i.test(v);
 
 // source words + options
@@ -480,12 +499,18 @@ async function start(url,format,playlist,label,btn){if(btn)btn.disabled=true;say
   remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח. ההורדה מופיעה במגירה למטה ומתעדכנת לבד.','info')}
  catch(e){say(e.message,'err')}finally{if(btn)btn.disabled=false}}
 
-// the downloads drawer: collapsed to a bar by default; the list is fetched when it opens and polled only while it is open
+// the downloads panel: closed by default; the list is fetched when it opens and polled only while it is open.
+// Two openers for the one panel: the bottom bar (phone) and the header button (wide screen, where the panel docks to the side).
 const sideOpen=()=>$('side').classList.contains('open');
-function setSide(open){$('side').classList.toggle('open',open);$('sideToggle').setAttribute('aria-expanded',String(open));if(open)loadJobs();else stopPoll()}
+function setSide(open){$('side').classList.toggle('open',open);document.body.classList.toggle('docked',open);
+ $('sideToggle').setAttribute('aria-expanded',String(open));$('dlOpen').setAttribute('aria-expanded',String(open));if(open)loadJobs();else stopPoll()}
 $('sideToggle').addEventListener('click',()=>setSide(!sideOpen()));
+$('dlOpen').addEventListener('click',()=>setSide(!sideOpen()));
+$('sideClose').addEventListener('click',()=>{setSide(false);$('dlOpen').focus()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sideOpen())setSide(false)});
 function sideSummary(jobs){const run=jobs.filter(j=>j.status!=='completed').length,ok=jobs.filter(j=>j.status==='completed'&&j.conclusion==='success').length;
- const p=[];if(run)p.push(`${run} בדרך`);if(ok)p.push(`${ok} מוכנות`);$('sideSum').textContent=p.join(' · ')||(jobs.length?'':'אין הורדות')}
+ const p=[];if(run)p.push(`${run} בדרך`);if(ok)p.push(`${ok} מוכנות`);$('sideSum').textContent=p.join(' · ')||(jobs.length?'':'אין הורדות');
+ $('dlSum').textContent=run?`${run} בדרך`:''}
 
 // downloads
 function metaAll(){try{return JSON.parse(store.get('ytJobs','{}'))}catch{return{}}}
@@ -513,43 +538,44 @@ function stopOf(j,d){if(j.status==='pending'||j.status==='queued')return 0;
  if(j.conclusion==='success')return 3;
  return /delivered: FAILED/.test(d.summary||'')&&/^files:\n\s+\S/m.test(d.summary||'')?2:1}
 const STAGE=['בתור','מוריד','שומר בדרייב','מוכן'];
-function pill(j,d,drive){const at=stopOf(j,d);
- if(j.status!=='completed')return`<span class="pill p-run"><span class="spin"></span>${at===2&&drive===false?'מכין קובץ':STAGE[at]}</span>`;
- if(j.conclusion==='success')return`<span class="pill p-ok">${ico('check')}מוכן</span>`;
- return`<span class="pill p-bad">${j.conclusion==='cancelled'?'בוטל':'נכשל'}</span>`}
-function meter(j,d){const at=stopOf(j,d),failed=j.status==='completed'&&j.conclusion!=='success';
- return `<div class="meter" aria-hidden="true">${[0,1,2,3].map(i=>{
-  const c=failed?(i<at?'done':i===at?'fail':''):(i<at||at===3?'done':i===at?'now':'');
-  return `<i class="${c}"></i>`}).join('')}</div>`}
-// live progress under the meter while the Download step runs (d.progress from /api/jobs/:id, refreshed every poll)
+// a running job: one bar (a real percentage while the Download step reports it, otherwise a moving one) and a line
+// that starts with the stage; d.progress comes from /api/jobs/:id and is refreshed every poll
 const PP={ExtractAudio:'ממיר ל-MP3',FFmpegMerger:'מחבר וידאו ושמע',Merger:'מחבר וידאו ושמע',Metadata:'מוסיף פרטים לקובץ',EmbedThumbnail:'מוסיף תמונה לקובץ',EmbedSubtitle:'מוסיף כתוביות',MoveFiles:'מסיים את הקובץ',Exec:'שולח לדרייב'};
-function progressLine(p,m){const t=[];let pct=null;
- if(p.kind==='download'){pct=p.percent==null?null:Math.round(p.percent);
-  if(pct!=null)t.push(pct+'%');else if(p.fragment&&p.fragments)t.push(`חלק ${p.fragment} מתוך ${p.fragments}`);
+function progress(j,d,m){const at=stopOf(j,d),p=at===1?d.progress:null,t=[];let pct=null;
+ if(p&&p.kind==='download'){pct=p.percent==null?null:Math.round(p.percent);
+  if(pct==null&&p.fragment&&p.fragments)t.push(`חלק ${p.fragment} מתוך ${p.fragments}`);
+  if(p.eta)t.push('עוד '+p.eta);
   if(p.total)t.push(`${p.downloaded||'0'} מתוך ${p.total}`);else if(p.downloaded)t.push(p.downloaded);
-  if(p.speed)t.push(p.speed);if(p.eta)t.push('עוד '+p.eta);
+  if(p.speed)t.push(p.speed);
   if(m.format==='video'&&p.stream)t.push(p.stream==='audio'?'ערוץ השמע':'הווידאו')}
- else if(p.kind==='post')t.push(PP[p.postprocessor]||'מעבד את הקובץ');
- else t.push('מתחיל…');
- if(p.items>1&&p.item)t.push(`פריט ${p.item} מתוך ${p.items}`);
- return`<div class="prog">${pct!=null?`<div class="bar"><i style="width:${pct}%"></i></div>`:''}<div class="ptxt">${esc(t.join(' · '))}</div></div>`}
+ else if(p&&p.kind==='post')t.push(PP[p.postprocessor]||'מעבד את הקובץ');
+ else if(at===1)t.push('מתחיל…');
+ if(p&&p.items>1&&p.item)t.push(`פריט ${p.item} מתוך ${p.items}`);
+ const bar=at?`<div class="bar${pct==null?' ind':''}"><i${pct==null?'':` style="width:${pct}%"`}></i></div>`:'';
+ return`<div class="prog">${bar}<div class="ptxt"><b>${STAGE[at]}${pct==null?'':' '+pct+'%'}</b>${t.length?' · '+esc(t.join(' · ')):''}</div></div>`}
+const openMore=new Set();   // jobs whose "details" are unfolded (kept across the re-render of every poll)
+function jobCard(j,m){const d=details[j.id]||{},done=j.status==='completed',ok=done&&j.conclusion==='success',open=openMore.has(j.id);
+ const drive=/Google Drive/i.test(d.summary||'');let body='';
+ const meta=[];if(m.format)meta.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)meta.push(m.quality==='best'?'מיטבית':m.quality+'p');
+ if(m.playlist==='yes')meta.push('רשימה'+(m.max?` עד ${m.max}`:''));meta.push(ago(j.created_at));
+ const st=!done?'':ok?(drive?'<span class="st-ok">נשמר בדרייב</span> · ':''):j.conclusion==='cancelled'?'בוטל · ':'<span class="st-bad">נכשל</span> · ';
+ if(!done)body+=progress(j,d,m);
+ else{const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
+  if(!ok&&!f&&j.conclusion!=='cancelled')body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
+  if(/^warning: /m.test(d.summary||''))body+='<div class="warn">חלק מהפריטים לא ירדו: פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.</div>';
+  if(f&&!drive)body+=`<a class="dl" href="${f.url}">${ico('down')}${/\.zip$/i.test(f.name)?'הורדת כל הקבצים (ZIP)':'הורדה'} · ${(f.size/1048576).toFixed(1)}MB</a>`}
+ const hasMore=!!(d.summary||j.run_url);
+ if(open&&hasMore)body+=`<div class="jmore">${d.summary?`<pre>${esc(d.summary)}</pre>`:''}${j.run_url?`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}הריצה בגיטהאב</a>`:''}</div>`;
+ const mark=!done?(j.status==='in_progress'?'<span class="spin"></span>':ico('clock')):ico(ok?'check':'x');
+ return `<article class="job ${!done?'run':ok?'ok':j.conclusion==='cancelled'?'off':'bad'}"><span class="jst">${mark}</span><div class="jmain">
+  <div class="ttl" dir="auto">${esc(m.label||String(j.input||'').replace(/^https?:\/\/(www\.)?/,''))}</div>
+  <div class="jsub"><span class="meta">${st}${esc(meta.join(' · '))}</span>${hasMore?`<button type="button" class="more" data-more="${esc(j.id)}" aria-expanded="${open}">פרטים</button>`:''}</div>${body}</div></article>`}
 function render(jobs){const box=$('jobs');const M=metaAll();sideSummary(jobs);
  if(!jobs.length){box.innerHTML='<div class="empty">עוד אין הורדות. חפש סרטון, או הדבק קישור.</div>';return}
- box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const m=M[j.id]||{};const src=m.label||j.input||'';let body='';
-  const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('רשימה'+(m.max?` · עד ${m.max}`:''));
-  const drive=/Google Drive/i.test(d.summary||'')?true:(d.summary?false:null);
-  body+=meter(j,d);
-  if(j.status!=='completed'&&d.progress&&stopOf(j,d)===1)body+=progressLine(d.progress,m);
-  if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
-   if(j.conclusion!=='success'&&!f)body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
-   if(/^warning: /m.test(d.summary||''))body+='<div class="warn">חלק מהפריטים לא ירדו: פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.</div>';
-   body+='<div class="jact">';
-   if(drive===true)body+=`<span class="saved">${ico('check')}נשמר בגוגל דרייב</span>`;
-   else if(f)body+=`<a class="dl" href="${f.url}">${ico('down')}${/\.zip$/i.test(f.name)?'הורדת כל הקבצים (ZIP)':'הורדה'} · ${(f.size/1048576).toFixed(1)}MB</a>`;
-   body+=`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}פרטים</a></div>`;
-   if(d.summary)body+=`<details class="sum"><summary>סיכום טכני</summary><pre>${esc(d.summary)}</pre></details>`}
-  return `<article class="job${j.conclusion==='success'?' ok':''}"><div class="jtop"><div class="info"><div class="ttl">${esc(src)}</div>
-   <div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="when">${ago(j.created_at)}</span></div></div>${pill(j,d,drive)}</div>${body}</article>`}).join('')}
+ const card=j=>jobCard(j,M[j.id]||{}),run=jobs.filter(j=>j.status!=='completed'),done=jobs.filter(j=>j.status==='completed');
+ box.innerHTML=run.length&&done.length?`<div class="jgroup">בדרך</div>${run.map(card).join('')}<div class="jgroup">הסתיימו</div>${done.map(card).join('')}`:jobs.map(card).join('')}
+$('jobs').addEventListener('click',e=>{const b=e.target.closest('button[data-more]');if(!b)return;
+ const id=b.dataset.more;openMore.has(id)?openMore.delete(id):openMore.add(id);render(lastJobs)});
 async function loadJobs(){try{const{jobs}=await api('/api/jobs');const known=new Set(jobs.map(j=>j.id));
   for(const p of lastJobs)if(!known.has(p.id)&&p.status==='pending')jobs.unshift(p);lastJobs=jobs;
   await Promise.all(jobs.slice(0,8).map(async j=>{if(j.status==='completed'&&details[j.id]&&details[j.id].status==='completed')return;
