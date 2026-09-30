@@ -420,6 +420,7 @@ function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
  if(/not made this video available in your country|not available in your country/i.test(r))return'הסרטון חסום מחוץ לישראל, והשרת שמוריד נמצא בחו"ל.';
  if(/could not find the Kan stream|no stream found/i.test(r))return'לא נמצא וידאו בדף הזה של כאן. בדרך כלל זה דף שאינו פרק, למשל כתבה.';
  if(/Kan relay not configured/i.test(r))return'השרת הישראלי של כאן לא מוגדר.';
+ if(/^13 blocked/i.test(r))return'רשת 13 חוסמת את הפריט הזה להורדה, בדרך כלל כי זה קדימון או קטע מאחורי הקלעים. פרקים מלאים יורדים כרגיל.';
  if(/13 catalogue|episodes for this 13/i.test(r))return'לא מצאתי פרקים בקישור הזה של 13. אפשר לחפש את הסדרה בלשונית 13.';
  if(/private video/i.test(r))return'זה סרטון פרטי, ואי אפשר להוריד אותו.';
  if(/HTTP Error 403|Forbidden/i.test(r))return'יוטיוב חסם את ההורדה הפעם. כדאי לנסות שוב בעוד כמה דקות.';

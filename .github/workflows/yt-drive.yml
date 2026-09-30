@@ -229,7 +229,8 @@ jobs:
                       eps = season_eps(sid, "")
           print(title)
           for o in [e for e in eps if e.get("entryId")][:limit]:
-              print("%s\t%s" % (o["entryId"], re.sub(r"[\t\r\n]+", " ", o.get("name") or o["entryId"])))
+              name = re.sub(r"\s*:\s*", " - ", re.sub(r"[\t\r\n]+", " ", o.get("name") or o["entryId"]))  # "פרק 7: שם" -> "פרק 7 - שם"
+              print("%s\t%s" % (o["entryId"], name))
           PY
           # Per-item upload for playlists (used with yt-dlp --exec after_move): send the finished file to Drive, delete
           # the local copy, and record its path for the release notes.
@@ -366,6 +367,8 @@ jobs:
               prune_leftovers
               for x in mp4 mp3; do [ -f "$target.$x" ] && { echo "OK via $via"; return 0; }; done
             done
+            # Reshet blocks some items (trailers, behind-the-scenes clips) for any address but a viewer's: say so plainly
+            echo "13 blocked: $safe" | tee -a dl.log
             return 1
           }
           case "$INPUT" in
@@ -428,7 +431,7 @@ jobs:
           n=$(( $(media_count) + $(wc -l < names.txt) ))
           if [ "$n" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")
-            r=$(grep -m1 -E "not made this video available in your country" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
+            r=$(grep -m1 -E "not made this video available in your country|^13 blocked" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
             echo "REASON=$(printf '%s' "$r" | sed 's/^ERROR: \[youtube\] [^:]*: //; s/k=[^&[:space:]]*/k=***/g' | tr -d '\r' | cut -c1-200)" >> "$GITHUB_ENV"
             echo "::error::nothing downloaded: $r"; exit 1
           fi
