@@ -28,6 +28,7 @@
   (tested with mock data locally).
 - **13 video** (only 13 audio ran in the cloud) and a **whole 13 series** link (season by season; tested locally with
   `c13_list.py` only). The **13 tab clicked through on the live site** (tested locally at phone width).
+- The **library view** (Kan / 13 tabs) on the live site - tested locally on the real indexes at phone width.
 - The **redesigned page on the live site** (tested locally at phone width, light and dark; job cards only with example data).
 - Failure paths: a playlist with removed / private items (the "some items failed" warning), Kan season with a failing
   episode.

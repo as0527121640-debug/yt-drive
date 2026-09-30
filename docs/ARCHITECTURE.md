@@ -29,7 +29,7 @@ Cloudflare Worker  GET /api/jobs/:id   the page polls it: step progress, then "s
 | Page (PWA) | `worker\public\index.html`, `sw.js`, `manifest.webmanifest`, `icon.svg` | Hebrew RTL, light/dark, installable, Android share target; one field for a search or a pasted link; tabs: videos / playlists / Kan / 13; quality + item-count selectors; series posters and one episode-list view for Kan and 13; each download shown as a four-stop route (sent / downloading / to Drive / done) |
 | Relay Worker `il-relay` | `relay\src\index.js`, `relay\wrangler.toml` | `[placement] region = "azure:israelcentral"` makes Cloudflare run it in Tel Aviv with an Israel-geolocated egress IP. `GET /r/<name>?k=<RELAY_KEY>&u=<url>` streams the URL; HLS playlists come back with every child URI rewritten through the relay. Key + host allowlist (kan.org.il, cdn-redge.media, kaltura.com) |
 | Download workflow | `.github\workflows\yt-drive.yml` | see "Workflow" |
-| Kan index | `scripts\build_kan_index.py` -> `data\kan-index.json`, refreshed by `.github\workflows\kan-index.yml` (03:23 UTC daily + manual) | 362 series scraped from Kan's VOD lobby; the Worker reads it from raw.githubusercontent.com |
+| Catalogue indexes | `scripts\build_kan_index.py` -> `data\kan-index.json`, `scripts\build_c13_index.py` -> `data\c13-index.json`, both refreshed by `.github\workflows\kan-index.yml` (03:23 UTC daily + manual; each step may fail alone) | Kan: 362 series scraped from the VOD lobby (section `s`). 13: 282 series with full episodes from the Kaltura OTT catalogue (genres `g`, date `d`, episode count `n`; the raw list is ~850 KB, too heavy for the Worker). The Worker reads both from raw.githubusercontent.com |
 
 ## Site API (all except login need the cookie)
 | Route | Purpose |
@@ -38,7 +38,8 @@ Cloudflare Worker  GET /api/jobs/:id   the page polls it: step progress, then "s
 | `GET /api/search?q=&type=video\|playlist` | YouTube Data API v3 (`search.list` + `videos.list` / `playlists.list`); 100+ units per search of the 10,000/day quota |
 | `GET /api/info?url=` | preview of a pasted link: YouTube oEmbed (+ Data API for playlist title / item count), Kan Open Graph tags; tells episode / season / series apart |
 | `GET /api/kan/search?q=` | Hebrew-normalised match (no niqqud / punctuation, all words must match) over `data/kan-index.json`; up to 30 series |
-| `GET /api/c13/search?q=` | Reshet 13 series whose name contains q (Kaltura OTT `asset/action/list`, type 1259, anonymous session); up to 30 |
+| `GET /api/c13/search?q=` | the same Hebrew-normalised match over `data/c13-index.json`; up to 30 series |
+| `GET /api/library?source=kan\|c13` | the whole index of one channel {title, url, thumb, groups, count} for the library view; the page filters (as you type), groups (13: genre, Kan: section) and sorts (as on the site / A-Z) itself |
 | `GET /api/episodes?url=` (alias `/api/kan/episodes`) | Kan: a series (-> first season + season list) or season page parsed into episodes. 13: seasons (lowest..highest SeasonNumber) and one season's episodes (default the newest season; by episode number, or the latest 100 when a season has more). Both return {title, seasons, season, episodes:[{url, title, duration, thumb}], source} |
 | `POST /api/jobs` {input, options:{format, quality, playlist, max_items}} | validates the link (YouTube, Kan or 13; 13 links are rewritten to the canonical shape below), dispatches the workflow, returns the job id |
 | `GET /api/jobs`, `GET /api/jobs/:id` | recent runs (matched by run title `yt [<id>]: <input>`); one job: status, current step, and when done the `job-<id>` release notes + files |

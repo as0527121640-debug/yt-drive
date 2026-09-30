@@ -26,8 +26,8 @@ in the user's Google Drive. Keshet 12 (mako) is not possible (bot wall with CAPT
 | `worker\` | the site Worker: `src\index.js` (auth, search, previews, Kan index/episodes, 13 catalogue via Kaltura OTT, job dispatch/status), `public\` (Hebrew RTL PWA page "לדרייב", service worker, manifest) |
 | `relay\` | `il-relay`: keyed, host-allowlisted fetch relay pinned to Cloudflare Tel Aviv (Kan streams are geo-gated to Israel) |
 | `.github\workflows\` | `yt-drive.yml` (download + deliver), `kan-index.yml` (daily catalogue refresh) |
-| `scripts\` | `build_kan_index.py`, `check.py` (static checks), `dev.mjs` (local dev server), `wr.mjs` (runs this project's wrangler in worker/ or relay/) |
-| `data\kan-index.json` | 362 Kan series (title, url, poster); built by the workflow, read by the Worker from raw.githubusercontent.com |
+| `scripts\` | `build_kan_index.py`, `build_c13_index.py`, `check.py` (static checks), `dev.mjs` (local dev server), `wr.mjs` (runs this project's wrangler in worker/ or relay/) |
+| `data\kan-index.json`, `data\c13-index.json` | 362 Kan series / 282 Reshet 13 series (title, url, poster; 13 also genres + episode count); built daily by `kan-index.yml`, read by the Worker from raw.githubusercontent.com for search and the library view |
 | `docs\` | see above |
 | `.local\` | git-ignored: `relay.key` (copy of RELAY_KEY for manual relay tests) |
 
