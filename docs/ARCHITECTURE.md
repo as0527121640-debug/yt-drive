@@ -8,13 +8,14 @@ pastes a link, and the video / audio ends up in their Google Drive. Nothing runs
 person (phone / PC / any browser)
    |  login (password), search or paste a link, pick format / quality / item count
    v
-Cloudflare Worker "yt-drive"        always on, free. Holds the secrets. Searches YouTube (Data API) and Kan
-   |                                (daily index), builds previews, dispatches the workflow, reports live status.
+Cloudflare Worker "yt-drive"        always on, free. Holds the secrets. Searches YouTube (Data API), Kan (daily
+   |                                index) and Reshet 13 (its Kaltura OTT catalogue), builds previews, dispatches the workflow, reports live status.
    |  POST /repos/<owner>/yt-drive/actions/workflows/yt-drive.yml/dispatches   (with a random job_id)
    v
 GitHub Actions  yt-drive.yml        free (public repo), Ubuntu runner, up to 240 min, ~14 GB disk
    |  YouTube: yt-dlp through Cloudflare WARP (GitHub IPs are bot-flagged)      ---> YouTube
    |  Kan:     page HTML direct; HLS segments through Worker "il-relay" (Tel Aviv) ---> Kan CDN (geo-gated to Israel)
+   |  13:      Kaltura HLS by entry id, direct (il-relay as a fallback)                ---> Kaltura (partner 2748741)
    |  rclone: each finished item -> the user's Google Drive
    |  prerelease "job-<id>" = release notes (what was saved, warnings) - no media in it when Drive is on
    v
@@ -25,7 +26,7 @@ Cloudflare Worker  GET /api/jobs/:id   the page polls it: step progress, then "s
 | Component | Where | Notes |
 |---|---|---|
 | Site Worker `yt-drive` | `worker\src\index.js`, `worker\wrangler.toml` | password gate (HMAC cookie `ytd`, 30 days, no server state), all API routes below, serves `worker\public\` (assets with `run_worker_first = true`) |
-| Page (PWA) | `worker\public\index.html`, `sw.js`, `manifest.webmanifest`, `icon.svg` | Hebrew RTL, light/dark, installable, Android share target; tabs: videos / playlists / Kan; quality + item-count selectors; pasted-link preview; Kan episode list |
+| Page (PWA) | `worker\public\index.html`, `sw.js`, `manifest.webmanifest`, `icon.svg` | Hebrew RTL, light/dark, installable, Android share target; one field for a search or a pasted link; tabs: videos / playlists / Kan / 13; quality + item-count selectors; series posters and one episode-list view for Kan and 13; each download shown as a four-stop route (sent / downloading / to Drive / done) |
 | Relay Worker `il-relay` | `relay\src\index.js`, `relay\wrangler.toml` | `[placement] region = "azure:israelcentral"` makes Cloudflare run it in Tel Aviv with an Israel-geolocated egress IP. `GET /r/<name>?k=<RELAY_KEY>&u=<url>` streams the URL; HLS playlists come back with every child URI rewritten through the relay. Key + host allowlist (kan.org.il, cdn-redge.media, kaltura.com) |
 | Download workflow | `.github\workflows\yt-drive.yml` | see "Workflow" |
 | Kan index | `scripts\build_kan_index.py` -> `data\kan-index.json`, refreshed by `.github\workflows\kan-index.yml` (03:23 UTC daily + manual) | 362 series scraped from Kan's VOD lobby; the Worker reads it from raw.githubusercontent.com |
@@ -37,8 +38,9 @@ Cloudflare Worker  GET /api/jobs/:id   the page polls it: step progress, then "s
 | `GET /api/search?q=&type=video\|playlist` | YouTube Data API v3 (`search.list` + `videos.list` / `playlists.list`); 100+ units per search of the 10,000/day quota |
 | `GET /api/info?url=` | preview of a pasted link: YouTube oEmbed (+ Data API for playlist title / item count), Kan Open Graph tags; tells episode / season / series apart |
 | `GET /api/kan/search?q=` | Hebrew-normalised match (no niqqud / punctuation, all words must match) over `data/kan-index.json`; up to 30 series |
-| `GET /api/kan/episodes?url=` | a Kan series (-> first season + season list) or season page parsed into episodes {url, title, duration, thumb} |
-| `POST /api/jobs` {input, options:{format, quality, playlist, max_items}} | validates the link (YouTube or Kan), dispatches the workflow, returns the job id |
+| `GET /api/c13/search?q=` | Reshet 13 series whose name contains q (Kaltura OTT `asset/action/list`, type 1259, anonymous session); up to 30 |
+| `GET /api/episodes?url=` (alias `/api/kan/episodes`) | Kan: a series (-> first season + season list) or season page parsed into episodes. 13: seasons (lowest..highest SeasonNumber) and one season's episodes (default the newest season; by episode number, or the latest 100 when a season has more). Both return {title, seasons, season, episodes:[{url, title, duration, thumb}], source} |
+| `POST /api/jobs` {input, options:{format, quality, playlist, max_items}} | validates the link (YouTube, Kan or 13; 13 links are rewritten to the canonical shape below), dispatches the workflow, returns the job id |
 | `GET /api/jobs`, `GET /api/jobs/:id` | recent runs (matched by run title `yt [<id>]: <input>`); one job: status, current step, and when done the `job-<id>` release notes + files |
 | `GET /api/files/:assetId` | 302 to a short-lived download URL of a release asset (only used when Drive is off) |
 | `POST /share` | PWA share-target fallback |
@@ -57,6 +59,11 @@ Inputs: `input` (URL), `format` video|audio, `quality` best|1080|720|480 (defaul
    - Kan episode: resolve the m3u8 from the episode page, wrap it in the relay URL, hand it to yt-dlp (audio = the audio
      rendition only, `-f ba/b`). Kan season / series link: `kan_list.py` expands it to episode pages (limit `max_items`),
      each downloaded in turn.
+   - Reshet 13: `c13_list.py` turns the link into Kaltura entry ids via the OTT catalogue (episode, season, or a whole
+     series season by season; same order as the site's list). Each entry is fetched as HLS from
+     `cdnapisec.kaltura.com/.../playManifest/entryId/<id>/format/applehttp/protocol/https/a.m3u8` (max 720p; the mp4
+     renditions answer 404 everywhere) - straight from the runner, and through the relay only if that fails. Canonical
+     links: `https://13tv.co.il/allshows/series/<sid>/[season/<n>/[<assetId>/]]`, or `https://13tv.co.il/allshows/<assetId>/`.
    - Only media extensions count as results; thumbnails, `.part` and subtitle leftovers are pruned.
    - With Drive configured, multi-item runs upload every finished item at once (`upload_one.sh`, `rclone moveto`) so the
      runner disk never holds a whole playlist / season and a timeout keeps what already finished.
@@ -73,6 +80,9 @@ YouTube/                                   (DRIVE_DIR, default "YouTube")
 Kan/                                       (KAN_DRIVE_DIR, default "Kan")
   <series> - <episode name>.mp4|mp3        one episode  (name = the page's JSON-LD "series | episode - subtitle")
   <series>/NN - <series> - <episode>.ext   a season or series, NN = position in the download
+13/                                        (C13_DRIVE_DIR, default "13")
+  <asset name>.mp4|mp3                     one episode, e.g. "המעברה, עונה 2, פרק 7 - שן תחת שן"
+  <series>/NN - <asset name>.ext           a season or series
 ```
 Hebrew names are kept (`--windows-filenames`; yt-dlp turns `|` and `:` into the full-width `｜` `：`).
 
@@ -89,7 +99,7 @@ Hebrew names are kept (`--windows-filenames`; yt-dlp turns `|` and `:` into the 
 | | `YT_COOKIES` *(optional)* | cookies.txt of a secondary Google account - fallback for the bot check |
 | | `YT_PROXY` *(optional)* | proxy URL (e.g. an Israeli residential one) - tried first when set |
 | GitHub repo (variables) | `RELAY_URL` | `https://il-relay.moovitdos.workers.dev` |
-| | `DRIVE_DIR`, `KAN_DRIVE_DIR` *(optional)* | Drive folders (defaults `YouTube`, `Kan`) |
+| | `DRIVE_DIR`, `KAN_DRIVE_DIR`, `C13_DRIVE_DIR` *(optional)* | Drive folders (defaults `YouTube`, `Kan`, `13`) |
 | This PC | `.local\relay.key` | copy of the relay key for manual tests (git-ignored) |
 
 ## Limits of the free tiers (design around them)

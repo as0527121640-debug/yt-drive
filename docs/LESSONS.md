@@ -45,6 +45,30 @@ the next site of this kind, is the skill `cloud-job-site` (`references\youtube-t
   nothing). Season pages carry an EMPTY `npawData.program` - take the first non-empty of npaw / og:title / `<title>`.
 - **Episode title:** the page's JSON-LD `VideoObject.name` ("series | episode - subtitle") beats og:title.
 
+## Reshet 13 (13tv.co.il)
+- **13tv.co.il is behind an Akamai bot wall** (curl gets 403 "Access Denied" even from Israel), but its catalogue is a
+  Kaltura OTT back end (`5031.frp1.ott.kaltura.com`, partner 5031) that answers `ottuser/action/anonymousLogin` - the
+  session every visitor's browser opens. Series = asset type 1259, full episodes = 1268 (metas `SeriesID`,
+  `SeasonNumber`, `EpisodeNumber`), and each episode carries its Kaltura `entryId` (video partner 2748741).
+- **Keep OTT answers small:** `responseProfile` `KalturaOnDemandResponseProfile` with `retrievedProperties` cuts an
+  episode from ~6.5 KB to ~1.7 KB (4.7 KB with `mediaFiles`, which holds the duration). `groupBy` returns no
+  aggregations here, so the season list comes from two one-item queries ordered by `SeasonNumber` (`dynamicOrderBy`
+  META_ASC / META_DESC). News shows have hundreds of episodes in one season: those lists take the latest 100.
+- **Only HLS works.** yt-dlp's Kaltura extractor lists mp4 renditions up to 1080p, but they answer 404 everywhere (the
+  first cloud test "failed" on that, not on geography). The HLS ladder goes to 720p and is AES-128 with the key served
+  to any player. yt-dlp's playManifest URL ends in `protocol/http` and its cfvod URLs are signed for http (https -> 403);
+  building `cdnapisec.kaltura.com/.../format/applehttp/protocol/https/a.m3u8` gives an all-https chain.
+- **Newer episodes download straight from the GitHub runner** (tested 2026-09-30). Older items (in "המעברה" the first
+  episodes of season 1, uploaded earlier) carry a stricter access rule that blocks the runner AND the Cloudflare relay in
+  Tel Aviv (`baseEntry/action/getPlaybackContext` -> action type 1 = BLOCK, 0 sources; a home connection gets 2 sources).
+  So it is not only a country check. The workflow reports these as "13 blocked" and goes on with the next episode. The
+  only clean way to get them would be the user's own connection (e.g. a self-hosted runner at home).
+
+## Keshet 12 (mako.co.il) - not supported
+- Episode pages redirect to a Radware bot wall with a CAPTCHA (`validate.perfdrive.com`), from curl and from a real
+  browser, from Israel too. Getting past that would mean defeating bot protection, which this project does not do. The
+  Keshet 12 YouTube channel mostly has clips, which the normal YouTube search already covers.
+
 ## Google Drive / rclone
 - `scope=drive.file` (only files rclone creates). Authorize with a portable rclone and **redirect its output**: on success
   it prints the access and refresh tokens. One was displayed once; it was revoked (`POST oauth2.googleapis.com/revoke`)

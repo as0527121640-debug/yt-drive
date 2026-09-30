@@ -50,6 +50,9 @@ RCLONE_CONF_BASE64 -R ...` (Git Bash - a PowerShell pipe adds `\r\n`), delete th
 | playlist | `https://www.youtube.com/playlist?list=PLOGi5-fAu8bEm4DqzTayOzmf6yOu0P-pQ` (TED-Ed) | `playlist=yes max_items=3 format=audio` | ~3 min |
 | Kan episode | `https://www.kan.org.il/content/kan/kan-11/p-12845/s1/134630/` | `format=audio` | ~7 min |
 | Kan season | `https://www.kan.org.il/content/kan/kan-11/p-12845/s1/` | `playlist=yes max_items=2 format=audio` | ~14 min |
+| 13 episode | `https://13tv.co.il/allshows/series/718/season/2/4591934/` (46 min) | `format=audio` | ~5 min |
+| 13 season | `https://13tv.co.il/allshows/series/718/season/2/` | `playlist=yes max_items=2 format=audio` | ~8 min |
+| 13 blocked item (expect a clear "13 blocked" reason) | `https://13tv.co.il/allshows/series/718/season/1/4315562/` | `format=audio` | ~2 min |
 ```
 gh workflow run yt-drive.yml -R as0527121640-debug/yt-drive -f input=<url> -f format=audio -f playlist=yes -f max_items=3 -f job_id=test0001
 gh release view job-test0001 -R as0527121640-debug/yt-drive --json body --jq .body     # source / delivered / files
