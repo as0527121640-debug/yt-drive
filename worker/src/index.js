@@ -2,6 +2,7 @@
 // The Worker holds the secrets and does the SEARCH (YouTube Data API). The DOWNLOAD runs in GitHub Actions (yt-dlp).
 //   POST /api/login / GET /api/me / POST /api/logout   - password gate (HMAC cookie)
 //   GET  /api/search?q=...                              - YouTube Data API search.list (+ durations)
+//   GET  /api/kan/search, /api/c13/search, /api/episodes?url= - Kan / Reshet 13 series search and episode lists
 //   POST /api/jobs   {input, options:{format}}          - dispatch yt-drive.yml with the video URL
 //   GET  /api/jobs / GET /api/jobs/:id                  - recent jobs + one job's status/result
 //   GET  /api/files/:assetId                            - download a result file (when Drive is off)
@@ -17,6 +18,7 @@ const KAN_URL = /^(https?:\/\/)?(www\.)?kan\.org\.il\//i;
 const KAN_SERIES = /^https:\/\/www\.kan\.org\.il\/content\/kan\/[^/]+\/p-\d+\/$/;          // a whole series
 const KAN_SEASON = /^https:\/\/www\.kan\.org\.il\/content\/kan\/[^/]+\/p-\d+\/s\d+\/$/;   // one season of it
 const KAN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+const C13_URL = /^(https?:\/\/)?(www\.)?13tv\.co\.il\//i;
 
 export default {
   async fetch(request, env) {
@@ -41,7 +43,11 @@ async function route(request, env) {
   if (p === '/api/search' && request.method === 'GET') return search(env, url.searchParams.get('q') || '', url.searchParams.get('type'));
   if (p === '/api/info' && request.method === 'GET') return linkInfo(env, url.searchParams.get('url') || '');
   if (p === '/api/kan/search' && request.method === 'GET') return kanSearch(env, url.searchParams.get('q') || '');
-  if (p === '/api/kan/episodes' && request.method === 'GET') return kanEpisodes(url.searchParams.get('url') || '');
+  if (p === '/api/c13/search' && request.method === 'GET') return c13Search(url.searchParams.get('q') || '');
+  if ((p === '/api/episodes' || p === '/api/kan/episodes') && request.method === 'GET') {
+    const u = url.searchParams.get('url') || '';
+    return C13_URL.test(u) ? c13Episodes(u) : kanEpisodes(u);
+  }
   if (p === '/api/jobs' && request.method === 'POST') return startJob(request, env);
   if (p === '/api/jobs' && request.method === 'GET') return listJobs(env);
   let m = p.match(/^\/api\/jobs\/([0-9a-f]{6,16})$/);
@@ -212,7 +218,122 @@ async function kanEpisodes(raw) {
     if (seasons.length) { season = seasons[0].url; page = await kanPage(season); }
     else if (!kanEpisodesOf(page).length) { season = u + 's1/'; page = await kanPage(season); }
   }
-  return json({ url: u, title, seasons, season, episodes: kanEpisodesOf(page).slice(0, 200) });
+  return json({ url: u, title, seasons, season, episodes: kanEpisodesOf(page).slice(0, 200), source: 'kan' });
+}
+
+// ---- Reshet 13 (13tv.co.il): its catalogue is a Kaltura OTT back end (partner 5031) that answers an anonymous
+// session - the same one the site opens for every visitor - while 13tv.co.il itself sits behind a bot wall. Series are
+// assets of type 1259, episodes type 1268 with metas SeriesID / SeasonNumber / EpisodeNumber; each episode carries the
+// Kaltura entryId that the workflow downloads (HLS, up to 720p). URLs we use (the site's own shape):
+//   series  https://13tv.co.il/allshows/series/<sid>/      season  .../series/<sid>/season/<n>/
+//   episode .../series/<sid>/season/<n>/<assetId>/          single clip / movie  https://13tv.co.il/allshows/<assetId>/
+const C13_OTT = 'https://5031.frp1.ott.kaltura.com/api_v3/service/';
+const C13_SERIES = 1259, C13_EPISODE = 1268;
+function parse13(raw) {
+  try {
+    const x = new URL(/^https?:/i.test(raw) ? raw : 'https://' + raw);
+    const m = x.pathname.match(/\/series\/(\d+)(?:\/season\/(\d+)(?:\/(\d+))?)?\/?$/);
+    if (m) return { sid: m[1], season: m[2] || '', asset: m[3] || '' };
+    const a = x.pathname.match(/^\/allshows\/(\d+)\/?$/);
+    if (a) return { sid: '', season: '', asset: a[1] };
+  } catch {}
+  return null;
+}
+const c13Url = ({ sid, season, asset }) => (!sid || (asset && !season)) ? `https://13tv.co.il/allshows/${asset}/`
+  : `https://13tv.co.il/allshows/series/${sid}/` + (season ? `season/${season}/` : '') + (season && asset ? `${asset}/` : '');
+let c13ks = '', c13ksExp = 0;
+async function ottCall(svc, body) {
+  const r = await fetch(C13_OTT + svc, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, apiVersion: '5.4.0' }) });
+  const d = await r.json().catch(() => ({}));
+  const err = d.result && d.result.error;
+  if (!r.ok || !d.result || err) throw new Error(`רשת 13 לא ענתה (${(err && err.message) || r.status})`);
+  return d.result;
+}
+async function ott(svc, body) {
+  if (!c13ks || Date.now() / 1000 > c13ksExp - 3600) {
+    const s = await ottCall('ottuser/action/anonymousLogin', { partnerId: 5031 });
+    c13ks = s.ks; c13ksExp = s.expiry || 0;
+  }
+  return ottCall(svc, { ...body, ks: c13ks });
+}
+async function ottList(kSql, { n = 100, order, props = 'id,name,metas,images' } = {}) {
+  const filter = { objectType: 'KalturaSearchAssetFilter', kSql };
+  if (order) filter.dynamicOrderBy = { objectType: 'KalturaDynamicOrderBy', name: order[0], orderBy: order[1] };
+  const r = await ott('asset/action/list', { filter, pager: { pageSize: n, pageIndex: 1 },
+    responseProfile: { objectType: 'KalturaOnDemandResponseProfile', retrievedProperties: props } });
+  return { total: r.totalCount || 0, items: r.objects || [] };
+}
+const ottMeta = (o, k) => { const v = (o.metas || {})[k]; return v && v.value != null ? v.value : ''; };
+function ottImage(o, ratio, w, h) {
+  const im = (o.images || []).find(i => i.ratio === ratio) || (o.images || [])[0];
+  return im && im.url ? `${im.url}/width/${w}/height/${h}` : '';
+}
+const secsClock = n => { n = Math.round(+n || 0); return n > 0 ? iso8601ToClock(`PT${Math.floor(n / 3600)}H${Math.floor(n / 60) % 60}M${n % 60}S`) : ''; };
+const kq = s => String(s).replace(/['\\]/g, ' ').trim();      // a value inside KSQL quotes
+async function c13Search(q) {
+  q = kq(q);
+  if (!q) return json({ items: [] });
+  const { items } = await ottList(`(and name~'${q}' asset_type='${C13_SERIES}')`, { n: 30, props: 'id,name,metas,images' });
+  return json({ items: items.filter(o => ottMeta(o, 'SeriesID')).map(o => ({
+    url: c13Url({ sid: ottMeta(o, 'SeriesID') }), title: o.name || '', channel: '13', thumb: ottImage(o, '2x3', 240, 360), kind: 'series' })) });
+}
+async function c13SeriesAsset(sid) {
+  const { items } = await ottList(`(and SeriesID='${kq(sid)}' asset_type='${C13_SERIES}')`, { n: 1, props: 'id,name,images' });
+  return items[0] || null;
+}
+// the season numbers of a series, from its lowest and highest SeasonNumber (two one-item queries instead of a full scan)
+async function c13Seasons(sid) {
+  const q = `(and SeriesID='${kq(sid)}' asset_type='${C13_EPISODE}')`;
+  const [lo, hi] = await Promise.all(['META_ASC', 'META_DESC'].map(o => ottList(q, { n: 1, order: ['SeasonNumber', o], props: 'metas' })));
+  const a = +ottMeta(lo.items[0] || {}, 'SeasonNumber'), b = +ottMeta(hi.items[0] || {}, 'SeasonNumber');
+  if (!a || !b) return [];
+  const out = [];
+  for (let n = Math.max(a, b - 39); n <= b; n++) out.push(n);
+  return out;
+}
+// one season's episodes in order; a long-running show (news: hundreds in one season) gives its latest 100 instead.
+// The workflow's c13_list.py orders exactly the same way, so "whole season" downloads what this list shows.
+async function c13SeasonEpisodes(sid, season) {
+  const q = `(and SeriesID='${kq(sid)}' asset_type='${C13_EPISODE}'` + (season ? ` SeasonNumber='${kq(season)}'` : '') + ')';
+  const props = 'id,name,metas,images,mediaFiles';
+  let r = await ottList(q, { n: 100, order: ['EpisodeNumber', 'META_ASC'], props });
+  let latest = false;
+  if (r.total > 100) { r = await ottList(q, { n: 100, order: ['EpisodeNumber', 'META_DESC'], props }); latest = true; }
+  return { total: r.total, latest, items: r.items };
+}
+async function c13Episodes(raw) {
+  const p = parse13(String(raw).trim());
+  if (!p || !p.sid) return json({ error: 'זה לא קישור של סדרה או עונה ב-13' }, 400);
+  const [series, seasons] = await Promise.all([c13SeriesAsset(p.sid), c13Seasons(p.sid)]);
+  const title = series ? series.name : '';
+  const season = p.season || (seasons.length ? String(seasons[seasons.length - 1]) : '');   // default: the newest season
+  const eps = await c13SeasonEpisodes(p.sid, season);
+  const strip = new RegExp('^' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[,:\\-]\\s*');
+  return json({
+    url: c13Url({ sid: p.sid }), title, source: '13', total: eps.total, latest: eps.latest,
+    seasons: seasons.map(n => ({ n, label: `עונה ${n}`, url: c13Url({ sid: p.sid, season: String(n) }) })),
+    season: season ? c13Url({ sid: p.sid, season }) : c13Url({ sid: p.sid }),
+    episodes: eps.items.map(o => ({
+      url: c13Url({ sid: p.sid, season: ottMeta(o, 'SeasonNumber') || season, asset: o.id }),
+      title: title && strip.test(o.name || '') ? (o.name || '').replace(strip, '') : (o.name || ''),
+      duration: secsClock(((o.mediaFiles || [])[0] || {}).duration),
+      thumb: ottImage(o, '16x9', 320, 180),
+    })),
+  });
+}
+async function c13Info(raw) {
+  const p = parse13(raw);
+  if (!p) return json({ error: 'לא הצלחתי לזהות את הקישור של 13. צריך קישור של פרק, עונה או סדרה.' }, 400);
+  if (p.asset) {
+    const o = await ott('asset/action/get', { id: p.asset, assetReferenceType: 'media' });
+    return json({ url: c13Url(p), title: o.name || '', channel: '13', thumb: ottImage(o, '16x9', 480, 270), playlist: false, source: '13', listKind: '' });
+  }
+  const s = await c13SeriesAsset(p.sid);
+  if (!s) return json({ error: 'הסדרה לא נמצאה ב-13' }, 404);
+  const kind = p.season ? 'season' : 'series';
+  return json({ url: c13Url(p), title: s.name + (p.season ? ` · עונה ${p.season}` : ''), channel: '13', thumb: ottImage(s, '2x3', 240, 360),
+    playlist: true, source: '13', listKind: kind });
 }
 
 // A playlist's title / channel / thumbnail / item count from the YouTube Data API (1 quota unit). Null when there
@@ -235,6 +356,7 @@ const listIdOf = u => ((String(u).match(/[?&]list=([A-Za-z0-9_-]+)/) || [])[1]) 
 async function linkInfo(env, raw) {
   const m = String(raw).match(/https?:\/\/\S+/i);
   const u = m ? m[0] : String(raw).trim();
+  if (C13_URL.test(u)) return c13Info(u);
   if (KAN_URL.test(u)) {
     const ku = normKanUrl(u);
     const kind = KAN_SEASON.test(ku) ? 'season' : KAN_SERIES.test(ku) ? 'series' : 'episode';
@@ -242,9 +364,9 @@ async function linkInfo(env, raw) {
     const og = p => decodeHtml((h.match(new RegExp('<meta\\s+property="og:' + p + '"\\s+content="([^"]*)"', 'i')) || [])[1] || '');
     // a series / season page is described by the program's name, an episode page by its own title
     const title = kind === 'episode' ? (og('title') || decodeHtml((h.match(/<title>([^<]*)/i) || [])[1] || '')) : kanProgram(h);
-    return json({ url: ku, title: title.trim(), channel: 'כאן 11', thumb: og('image'), playlist: kind !== 'episode', kan: true, kanKind: kind });
+    return json({ url: ku, title: title.trim(), channel: 'כאן 11', thumb: og('image'), playlist: kind !== 'episode', kan: true, kanKind: kind, source: 'kan', listKind: kind === 'episode' ? '' : kind });
   }
-  if (!YT_URL.test(u)) return json({ error: 'לא קישור של YouTube או כאן' }, 400);
+  if (!YT_URL.test(u)) return json({ error: 'לא קישור של יוטיוב, כאן או 13' }, 400);
   const listId = listIdOf(u);
   const pureList = /youtube\.com\/playlist\?/i.test(u);
   const pm = listId ? await playlistMeta(env, listId) : null;
@@ -306,13 +428,19 @@ async function startJob(request, env) {
   const m = input.match(/https?:\/\/\S+/i);
   if (m) input = m[0];
   if (KAN_URL.test(input)) input = normKanUrl(input);     // the workflow tells episode / season / series apart by the URL
-  if (!YT_URL.test(input) && !KAN_URL.test(input)) return json({ error: 'צריך קישור של YouTube או כאן (או לבחור מתוצאות החיפוש)' }, 400);
+  let c13 = null;
+  if (C13_URL.test(input)) {                               // 13: our canonical URL shape, which c13_list.py in the workflow reads
+    c13 = parse13(input);
+    if (!c13) return json({ error: 'לא הצלחתי לזהות את הקישור של 13. צריך קישור של פרק, עונה או סדרה.' }, 400);
+    input = c13Url(c13);
+  }
+  if (!YT_URL.test(input) && !KAN_URL.test(input) && !c13) return json({ error: 'צריך קישור של יוטיוב, כאן או 13 (או לבחור מתוצאות החיפוש)' }, 400);
   if (!/^https?:\/\//i.test(input)) input = 'https://' + input;
   const o = b.options || {};
   const format = o.format === 'audio' ? 'audio' : 'video';
   const quality = ['best', '1080', '720', '480'].includes(String(o.quality)) ? String(o.quality) : '1080';
   // a pure playlist link always means the whole list; a watch?v=..&list=.. link only when asked
-  const playlist = (o.playlist === 'yes' || /youtube\.com\/playlist\?/i.test(input) || KAN_SERIES.test(input) || KAN_SEASON.test(input)) ? 'yes' : 'no';
+  const playlist = (o.playlist === 'yes' || /youtube\.com\/playlist\?/i.test(input) || KAN_SERIES.test(input) || KAN_SEASON.test(input) || (c13 && !c13.asset)) ? 'yes' : 'no';
   // how many playlist items from the start: 1..100, default 50 (Kan / single videos ignore it)
   const maxItems = String(Math.min(100, Math.max(1, parseInt(o.max_items, 10) || 50)));
   const id = newId();

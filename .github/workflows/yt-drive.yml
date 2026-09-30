@@ -1,4 +1,4 @@
-# yt-drive - download a YouTube video/audio with yt-dlp and (if rclone is configured) push it to Google Drive.
+# yt-drive - download a YouTube / Kan / Reshet 13 video or audio with yt-dlp and (if rclone is configured) push it to Google Drive.
 # Triggered by the yt-drive Cloudflare Worker (cloud/yt-drive) or manually from the Actions tab.
 # If secret RCLONE_CONF_BASE64 is set -> the file goes to Drive (folder from var DRIVE_DIR, default "YouTube").
 # Otherwise the file is attached to the job-<id> prerelease so the site can download it.
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       input:
-        description: 'YouTube URL'
+        description: 'YouTube, Kan or Reshet 13 URL'
         required: true
       format:
         description: 'video (mp4) or audio (mp3)'
@@ -56,6 +56,8 @@ jobs:
       RELAY: ${{ vars.RELAY_URL }}                   # il-relay Worker (runs in Cloudflare Tel Aviv) for Kan streams
       RELAY_KEY: ${{ secrets.RELAY_KEY }}
       DRIVE_DIR: ${{ vars.DRIVE_DIR || 'YouTube' }}
+      KAN_DRIVE_DIR: ${{ vars.KAN_DRIVE_DIR }}         # Kan / Reshet 13 get their own Drive folders (default Kan, 13)
+      C13_DRIVE_DIR: ${{ vars.C13_DRIVE_DIR }}
     # YouTube flags datacenter IPs ("Sign in to confirm you're not a bot"). The open-source answer (yt-dlp, cobalt,
     # Invidious) is a chain: PO token + visitor_data from a BotGuard generator, then alternate player clients, then
     # cookies/proxy if provided. The generator runs here as a sidecar - the one yt-dlp's own PO-token guide recommends.
@@ -172,6 +174,63 @@ jobs:
           for u in list(dict.fromkeys(urls))[:limit]:
               print(u)
           PY
+          # Reshet 13 URL (the Worker's canonical shape) -> line 1 = the series name, then "entryId<TAB>title" per episode,
+          # at most $2. The catalogue is Kaltura OTT (partner 5031) with an anonymous session, as the 13tv.co.il player
+          # uses; ordering matches the Worker's list (by episode number; a season of 100+ gives the latest first).
+          cat > c13_list.py <<'PY'
+          import json, re, sys, urllib.parse, urllib.request
+          B = "https://5031.frp1.ott.kaltura.com/api_v3/service/"
+          def call(svc, body):
+              req = urllib.request.Request(B + svc, json.dumps(dict(body, apiVersion="5.4.0")).encode(),
+                                           {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+              res = json.load(urllib.request.urlopen(req, timeout=30))["result"]
+              if isinstance(res, dict) and res.get("error"):
+                  sys.exit("13 api error: %s" % res["error"].get("message"))
+              return res
+          ks = call("ottuser/action/anonymousLogin", {"partnerId": 5031})["ks"]
+          def lst(ksql, n, order=None, props="id,name,metas,entryId"):
+              f = {"objectType": "KalturaSearchAssetFilter", "kSql": ksql}
+              if order:
+                  f["dynamicOrderBy"] = {"objectType": "KalturaDynamicOrderBy", "name": order[0], "orderBy": order[1]}
+              return call("asset/action/list", {"ks": ks, "filter": f, "pager": {"pageSize": n, "pageIndex": 1},
+                          "responseProfile": {"objectType": "KalturaOnDemandResponseProfile", "retrievedProperties": props}})
+          def meta(o, k):
+              return ((o.get("metas") or {}).get(k) or {}).get("value")
+          def season_eps(sid, season):
+              q = "(and SeriesID='%s' asset_type='1268'%s)" % (sid, " SeasonNumber='%s'" % season if season else "")
+              r = lst(q, 100, ("EpisodeNumber", "META_ASC"))
+              if (r.get("totalCount") or 0) > 100:
+                  r = lst(q, 100, ("EpisodeNumber", "META_DESC"))
+              return r.get("objects") or []
+          url, limit = sys.argv[1], int(sys.argv[2])
+          path = urllib.parse.urlparse(url).path
+          m = re.search(r"/series/(\d+)(?:/season/(\d+)(?:/(\d+))?)?/?$", path)
+          a = re.search(r"^/allshows/(\d+)/?$", path)
+          title, eps = "", []
+          if (m and m.group(3)) or a:
+              eps = [call("asset/action/get", {"ks": ks, "id": m.group(3) if m and m.group(3) else a.group(1),
+                                               "assetReferenceType": "media"})]
+          elif m:
+              sid, season = m.group(1), m.group(2)
+              s = lst("(and SeriesID='%s' asset_type='1259')" % sid, 1, props="id,name").get("objects") or []
+              title = s[0]["name"] if s else ""
+              if season:
+                  eps = season_eps(sid, season)
+              else:
+                  q = "(and SeriesID='%s' asset_type='1268')" % sid
+                  lo = lst(q, 1, ("SeasonNumber", "META_ASC"), "metas").get("objects") or [{}]
+                  hi = lst(q, 1, ("SeasonNumber", "META_DESC"), "metas").get("objects") or [{}]
+                  if meta(lo[0], "SeasonNumber") and meta(hi[0], "SeasonNumber"):
+                      for n in range(int(meta(lo[0], "SeasonNumber")), int(meta(hi[0], "SeasonNumber")) + 1):
+                          eps += season_eps(sid, n)
+                          if len(eps) >= limit:
+                              break
+                  else:
+                      eps = season_eps(sid, "")
+          print(title)
+          for o in [e for e in eps if e.get("entryId")][:limit]:
+              print("%s\t%s" % (o["entryId"], re.sub(r"[\t\r\n]+", " ", o.get("name") or o["entryId"])))
+          PY
           # Per-item upload for playlists (used with yt-dlp --exec after_move): send the finished file to Drive, delete
           # the local copy, and record its path for the release notes.
           cat > upload_one.sh <<'SH'
@@ -280,7 +339,58 @@ jobs:
             [ "$STREAM" = 1 ] || return 0
             find out -type f \( "${MEDIA_NAMES[@]}" \) -print0 | while IFS= read -r -d '' f; do bash ./upload_one.sh "$f"; done
           }
+          # ---- Reshet 13 ----
+          # One episode by its Kaltura entryId. HLS only: the progressive mp4 renditions answer 404 everywhere, and the
+          # HLS ladder tops out at 720p. Straight from the runner first; when that yields nothing (Israel-only content),
+          # again through il-relay (Kaltura is on its allowlist). $2 = folder, $3 = index prefix, $4 = the episode title.
+          c13_episode() {
+            local entry="$1" dir="$2" idx="$3" name="$4" master safe target url via x
+            master="https://cdnapisec.kaltura.com/p/2748741/sp/274874100/playManifest/entryId/$entry/format/applehttp/protocol/https/a.m3u8"
+            safe=$(printf '%s' "$name" | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$safe" ] || safe="13_$entry"
+            target="out/${dir:+$dir/}${idx:+$idx - }$safe"
+            echo "file name: ${target#out/}"
+            for via in direct relay; do
+              url="$master"
+              if [ "$via" = relay ]; then
+                [ -n "$RELAY" ] && [ -n "$RELAY_KEY" ] || break
+                url="$RELAY/r/a.m3u8?k=$RELAY_KEY&u=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$master")"
+              fi
+              echo "13: trying $via"
+              set +e
+              if [ "$FORMAT" = "audio" ]; then
+                yt-dlp --no-progress -f "wb/b" -x --audio-format mp3 --audio-quality 0 -o "$target.%(ext)s" "$url" 2>&1 | tee -a dl.log
+              else
+                yt-dlp --no-progress -f "${SEL:-bv*+ba/b}" --merge-output-format mp4 -o "$target.%(ext)s" "$url" 2>&1 | tee -a dl.log
+              fi
+              set -e
+              prune_leftovers
+              for x in mp4 mp3; do [ -f "$target.$x" ] && { echo "OK via $via"; return 0; }; done
+            done
+            return 1
+          }
           case "$INPUT" in
+            *13tv.co.il*)
+              DRIVE_DIR="${C13_DRIVE_DIR:-13}"; export DRIVE_DIR; echo "DRIVE_DIR=$DRIVE_DIR" >> "$GITHUB_ENV"
+              if ! PYTHONUTF8=1 python3 c13_list.py "$INPUT" "$MAX_ITEMS" > c13_eps.txt; then
+                echo "REASON=could not read the 13 catalogue for this link" >> "$GITHUB_ENV"; echo "::error::13 list failed"; exit 1
+              fi
+              series_dir=$(head -1 c13_eps.txt | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$series_dir" ] || series_dir="13"
+              total=$(( $(wc -l < c13_eps.txt) - 1 ))
+              echo "13: $total episode(s) of '$series_dir' (limit $MAX_ITEMS)"
+              if [ "$total" -lt 1 ]; then echo "REASON=could not find episodes for this 13 link" >> "$GITHUB_ENV"; echo "::error::no episodes"; exit 1; fi
+              i=0; c13_failed=0
+              while IFS=$'\t' read -r entry name; do
+                i=$((i+1))
+                echo "::group::13 episode $i/$total"
+                if [ "$PLAYLIST" = yes ]; then
+                  if c13_episode "$entry" "$series_dir" "$(printf '%02d' "$i")" "$name"; then kan_flush; else c13_failed=$((c13_failed+1)); fi
+                else
+                  c13_episode "$entry" "" "" "$name" || c13_failed=$((c13_failed+1))
+                fi
+                echo "::endgroup::"
+              done < <(tail -n +2 c13_eps.txt)
+              [ "$PLAYLIST" = yes ] && rc=$c13_failed
+              ;;
             *kan.org.il*)
               # Kan content goes to its own Drive folder (repo var KAN_DRIVE_DIR, default "Kan"), not into "YouTube"
               DRIVE_DIR="${KAN_DRIVE_DIR:-Kan}"; export DRIVE_DIR; echo "DRIVE_DIR=$DRIVE_DIR" >> "$GITHUB_ENV"
@@ -319,7 +429,7 @@ jobs:
           if [ "$n" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")
             r=$(grep -m1 -E "not made this video available in your country" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
-            echo "REASON=$(printf '%s' "$r" | sed 's/^ERROR: \[youtube\] [^:]*: //' | tr -d '\r' | cut -c1-200)" >> "$GITHUB_ENV"
+            echo "REASON=$(printf '%s' "$r" | sed 's/^ERROR: \[youtube\] [^:]*: //; s/k=[^&[:space:]]*/k=***/g' | tr -d '\r' | cut -c1-200)" >> "$GITHUB_ENV"
             echo "::error::nothing downloaded: $r"; exit 1
           fi
           echo "COUNT=$n" >> "$GITHUB_ENV"

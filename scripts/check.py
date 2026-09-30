@@ -4,7 +4,7 @@
   1. JavaScript syntax (node --check): worker/src/index.js, relay/src/index.js, worker/public/sw.js and the inline
      <script> of worker/public/index.html
   2. Workflows: every .github/workflows/*.yml parses as YAML and every `run:` step passes `bash -n`
-  3. The helper scripts the download workflow writes out as heredocs (kan_name.py, kan_list.py, upload_one.sh) are
+  3. The helper scripts the download workflow writes out as heredocs (kan_name.py, kan_list.py, c13_list.py, upload_one.sh) are
      extracted and syntax-checked; kan_name.py is also run on sample HTML - Hebrew names must survive
   4. data/kan-index.json parses and has a sane number of series
 
@@ -93,7 +93,7 @@ def main():
     print("3. Embedded helper scripts")
     dl = download_steps.get("Download")
     if dl:
-        for name in ("kan_name.py", "kan_list.py", "upload_one.sh"):
+        for name in ("kan_name.py", "kan_list.py", "c13_list.py", "upload_one.sh"):
             m = re.search(r"cat > %s <<'(\w+)'\n(.*?)\n\1\n" % re.escape(name), dl, re.S)
             if not m:
                 report(False, name + " is embedded in the Download step")

@@ -3,226 +3,284 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>YouTube לדרייב</title>
-<meta name="description" content="מחפשים ביוטיוב ושולחים וידאו, MP3 או פלייליסט שלם לגוגל דרייב">
+<title>לדרייב</title>
+<meta name="description" content="מחפשים ביוטיוב, בכאן או ב-13, והווידאו או ה-MP3 נשמרים בגוגל דרייב">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#0e1117">
+<meta name="theme-color" content="#eef0f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e15" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Heebo:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karantina:wght@400;700&family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* layout: one search-first column. A "shelf" of results (thumbnail grid) under a compact download-settings strip,
-   then the personal download log. Playlists read as stacked tapes; specs (1080p, 4:12) use tabular figures. */
+/* Layout: one phone-first column. The search field is the page; results sit under it as a list,
+   and every download is tracked like a parcel along a four-stop route: sent, downloading, to Drive, done. */
 :root{
-  --bg:#f3f4f7;--surface:#ffffff;--sunk:#e9ecf2;--ink:#12151d;--muted:#5d6577;--line:#d9dde6;
-  --accent:#d9412b;--accent-ink:#ffffff;--accent-soft:#fbe4df;--audio:#1f7a68;--audio-soft:#d6eee7;
-  --ok:#17744a;--ok-soft:#d9f0e3;--bad:#b3261e;--bad-soft:#f9e0de;--warn:#855d00;--warn-soft:#f8ecca;
-  --shadow:0 1px 2px rgba(18,21,29,.06),0 8px 24px rgba(18,21,29,.06);--lift:0 2px 6px rgba(18,21,29,.08),0 14px 32px rgba(18,21,29,.1);
-  --disp:"Rubik","Heebo",system-ui,sans-serif;--body:"Heebo",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --bg:#eef0f5;--surface:#ffffff;--sunk:#e4e8ef;--ink:#0f131b;--muted:#586173;--line:#d5dbe5;
+  --accent:#2447d8;--accent-ink:#ffffff;--accent-soft:#e1e7fc;
+  --audio:#a75f00;--audio-soft:#fbeed8;
+  --ok:#157347;--ok-soft:#daf1e4;--bad:#b42318;--bad-soft:#fbe3e0;--warn:#8a5a00;--warn-soft:#faefcf;
+  --scrim:rgba(8,11,18,.78);--on-scrim:#ffffff;
+  --shadow:0 1px 2px rgba(15,19,27,.05),0 10px 30px -12px rgba(15,19,27,.18);
+  --display:"Karantina","IBM Plex Sans Hebrew",system-ui,sans-serif;
+  --body:"IBM Plex Sans Hebrew",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --mono:"IBM Plex Mono","IBM Plex Sans Hebrew",ui-monospace,monospace;
+  --r:14px;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0e1117;--surface:#161a23;--sunk:#1e2330;--ink:#eceff5;--muted:#9aa3b5;--line:#2a3140;
-  --accent:#ff6a52;--accent-ink:#1a0703;--accent-soft:#361a14;--audio:#4cc9ad;--audio-soft:#10302a;
-  --ok:#4fd08a;--ok-soft:#10301f;--bad:#ff736a;--bad-soft:#361614;--warn:#e6bb52;--warn-soft:#30280e;
-  --shadow:none;--lift:0 10px 28px rgba(0,0,0,.45);color-scheme:dark;}}
+  --bg:#0b0e15;--surface:#131823;--sunk:#1b2130;--ink:#e9edf4;--muted:#8f99ad;--line:#262e3f;
+  --accent:#7f9bff;--accent-ink:#0a1033;--accent-soft:#1a2452;
+  --audio:#f2ab3c;--audio-soft:#34250c;
+  --ok:#55d394;--ok-soft:#11301f;--bad:#ff7b70;--bad-soft:#3a1714;--warn:#e9bd55;--warn-soft:#31290f;
+  --scrim:rgba(0,0,0,.72);--on-scrim:#ffffff;
+  --shadow:0 0 0 1px rgba(255,255,255,.02),0 12px 30px -14px rgba(0,0,0,.7);
+  color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0e1117;--surface:#161a23;--sunk:#1e2330;--ink:#eceff5;--muted:#9aa3b5;--line:#2a3140;
-  --accent:#ff6a52;--accent-ink:#1a0703;--accent-soft:#361a14;--audio:#4cc9ad;--audio-soft:#10302a;
-  --ok:#4fd08a;--ok-soft:#10301f;--bad:#ff736a;--bad-soft:#361614;--warn:#e6bb52;--warn-soft:#30280e;
-  --shadow:none;--lift:0 10px 28px rgba(0,0,0,.45);color-scheme:dark;}
+  --bg:#0b0e15;--surface:#131823;--sunk:#1b2130;--ink:#e9edf4;--muted:#8f99ad;--line:#262e3f;
+  --accent:#7f9bff;--accent-ink:#0a1033;--accent-soft:#1a2452;
+  --audio:#f2ab3c;--audio-soft:#34250c;
+  --ok:#55d394;--ok-soft:#11301f;--bad:#ff7b70;--bad-soft:#3a1714;--warn:#e9bd55;--warn-soft:#31290f;
+  --scrim:rgba(0,0,0,.72);--on-scrim:#ffffff;
+  --shadow:0 0 0 1px rgba(255,255,255,.02),0 12px 30px -14px rgba(0,0,0,.7);
+  color-scheme:dark}
+
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font:16px/1.55 var(--body)}
-.wrap{max-width:720px;margin:0 auto;padding-block:22px 56px;padding-inline:16px}
+body{font:16px/1.55 var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
-
-/* header */
-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
-.mark{width:44px;height:44px;flex:none;border-radius:12px;background:var(--accent);display:grid;place-items:center;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 35%,transparent)}
-.mark svg{width:22px;height:22px}
-header h1{font:700 22px/1.1 var(--disp);margin:0;letter-spacing:-.01em;text-wrap:balance}
-header p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
-header .grow{flex:1;min-width:0}
-.chipbtn{font:500 13px/1 var(--body);min-height:38px;padding:0 13px;border-radius:10px;background:var(--surface);color:var(--ink);border:1px solid var(--line);cursor:pointer}
-
-/* cards + inputs */
-.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
-.stack{display:flex;flex-direction:column;gap:14px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.field{flex:1;min-width:0;font:inherit;color:var(--ink);background:var(--sunk);border:1px solid transparent;border-radius:12px;padding:13px 14px}
-.field:focus{outline:none;border-color:var(--accent);background:var(--surface)}
-.btn{font:600 15px/1 var(--disp);border:0;border-radius:12px;padding:0 20px;min-height:48px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:transform .12s ease,filter .12s ease}
-.btn:active{transform:scale(.98)}
-.btn.primary{background:var(--accent);color:var(--accent-ink)}
-.btn.soft{background:var(--sunk);color:var(--ink)}
-.btn:disabled{opacity:.55;cursor:default;transform:none}
+img{max-width:100%}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wrap{max-width:760px;margin:0 auto;padding-block:max(14px,env(safe-area-inset-top,0px)) 64px;padding-inline:16px;display:flex;flex-direction:column;gap:22px}
+.wrap>*{min-width:0}
 
-/* segmented controls */
-.seg{display:inline-flex;background:var(--sunk);border-radius:11px;padding:3px;gap:2px}
-.seg button{font:500 13.5px/1 var(--body);border:0;background:transparent;color:var(--muted);padding:9px 13px;border-radius:9px;cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
-.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
-.label{font:500 12px/1 var(--body);color:var(--muted);letter-spacing:.02em}
-.settings{display:flex;gap:14px 18px;flex-wrap:wrap;align-items:center;padding-top:12px;border-top:1px dashed var(--line)}
-.settings .grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* top bar */
+.top{display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:baseline;gap:10px;flex:1;min-width:0}
+.brand b{font:700 46px/.8 var(--display);letter-spacing:.01em}
+.brand b em{font-style:normal;color:var(--accent)}
+.brand span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.iconbtn:hover{color:var(--ink)}
 
-details.paste summary{cursor:pointer;color:var(--muted);font-size:14px;list-style:none;display:inline-flex;align-items:center;gap:6px}
-details.paste summary::-webkit-details-marker{display:none}
-details.paste[open] summary{margin-bottom:10px}
-textarea.field{width:100%;min-height:64px;direction:ltr;text-align:left;resize:vertical}
-.preview{display:flex;gap:12px;align-items:center;background:var(--sunk);border-radius:12px;padding:8px;min-width:0}
-.preview img{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;flex:none;max-width:40%}
-.preview .pv{min-width:0;display:flex;flex-direction:column;gap:3px}
-.preview .ttl{-webkit-line-clamp:2}
-.preview.err{color:var(--bad);font-size:13.5px;padding:10px 12px}
-.check{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);cursor:pointer}
-.check input{width:18px;height:18px;accent-color:var(--accent)}
+/* login */
+.login{background:var(--surface);border-radius:20px;box-shadow:var(--shadow);padding:22px;display:flex;flex-direction:column;gap:12px;max-width:420px;width:100%;margin:8vh auto 0}
+.login h1{font:700 40px/.9 var(--display);margin:0}
+.login p{margin:0 0 6px;color:var(--muted);font-size:14px}
 
-/* results shelf */
-.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:16px;margin-top:4px}
-.res{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:visible;transition:transform .15s ease,box-shadow .15s ease;position:relative}
-.res:hover{transform:translateY(-2px);box-shadow:var(--lift)}
-.thumb{position:relative;aspect-ratio:16/9;border-radius:13px 13px 0 0;overflow:hidden;background:var(--sunk)}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.res.poster .thumb{aspect-ratio:2/3}
-.a-kan{background:var(--audio-soft);color:var(--audio)}
-/* Kan: episode list of a series / season */
-.kview{display:flex;flex-direction:column;gap:12px;margin-top:4px}
-.kview-head{display:flex;align-items:center;gap:10px}
-.kview-head h3{font:600 17px/1.25 var(--disp);margin:0;flex:1;min-width:0;text-wrap:balance}
-.eplist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.ep{display:grid;grid-template-columns:104px 1fr auto;gap:10px;align-items:center;background:var(--sunk);border-radius:12px;padding:8px}
-.ep img{width:104px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--surface);display:block}
-.ep .epm{min-width:0}
-.ep .epm .ttl{-webkit-line-clamp:2}
-.ep .epb{display:flex;gap:6px}
-.ep .epb button{min-width:46px;min-height:42px;border:0;border-radius:9px;font:600 15px/1 var(--body);cursor:pointer}
-@media (max-width:420px){.ep{grid-template-columns:84px 1fr}.ep img{width:84px}.ep .epb{grid-column:1/-1}.ep .epb button{flex:1}}
-.res.pl{margin-top:8px}
-.res.pl::before,.res.pl::after{content:"";position:absolute;inset-inline:10px;top:-5px;height:10px;border-radius:10px 10px 0 0;background:var(--sunk);border:1px solid var(--line);border-bottom:0;z-index:-1}
-.res.pl::after{inset-inline:20px;top:-9px;opacity:.7}
-.spec{position:absolute;bottom:7px;inset-inline-end:7px;background:rgba(10,12,18,.82);color:#fff;font:600 11.5px/1 var(--body);padding:4px 7px;border-radius:6px;font-variant-numeric:tabular-nums}
-.meta{padding:10px 11px 8px;display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
-.ttl{font:600 13.5px/1.35 var(--body);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.ch{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.acts{display:flex;gap:6px;padding:0 10px 10px}
-.acts button{flex:1;min-height:38px;border:0;border-radius:9px;font:600 12.5px/1 var(--body);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}
-.a-vid{background:var(--accent-soft);color:var(--accent)}
-.a-aud{background:var(--audio-soft);color:var(--audio)}
-.acts button:disabled{opacity:.5;cursor:default}
+/* composer */
+.composer{background:var(--surface);border-radius:20px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-2px -2px 0;padding:0 2px}
+.tabs button{border:0;background:none;padding:8px 12px 10px;font-weight:600;font-size:15px;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.tabs button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.searchrow{display:flex;gap:8px}
+.inbox{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:var(--sunk);border-radius:var(--r);padding:0 12px;border:1.5px solid transparent}
+.inbox:focus-within{border-color:var(--accent);background:var(--surface)}
+.inbox svg{color:var(--muted)}
+.inbox input{flex:1;min-width:0;width:100%;border:0;background:none;outline:none;padding:13px 0;font-size:16px}
+.inbox input::placeholder{color:var(--muted)}
+.inbox input::-webkit-search-cancel-button{display:none}
+.clear{border:0;background:none;color:var(--muted);padding:6px;display:grid;place-items:center}
+.btn{border:0;border-radius:var(--r);min-height:48px;padding:0 18px;font-weight:600;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s ease,filter .12s ease}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:default;transform:none}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.opts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.opt{display:inline-flex;align-items:center;gap:6px;background:var(--sunk);border-radius:999px;padding:0 4px 0 12px;font-size:13px;color:var(--muted);min-height:34px}
+.opt select{border:0;background:var(--surface);border-radius:999px;padding:5px 10px;font:500 13px/1.2 var(--mono);color:var(--ink);cursor:pointer}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
 
+/* link preview */
+.preview{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:start;background:var(--sunk);border-radius:var(--r);padding:10px}
+.preview>img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:9px;display:block;background:var(--line)}
+.preview.poster>img{aspect-ratio:2/3;width:88px}
+.preview.poster{grid-template-columns:88px 1fr}
+.pv{min-width:0;display:flex;flex-direction:column;gap:6px}
+.preview.err{display:block;background:var(--bad-soft);color:var(--bad);font-size:14px}
+.check{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;cursor:pointer}
+.check input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent);flex:none}
+.pair{display:flex;gap:8px;flex-wrap:wrap}
+.pair .btn{flex:1 1 120px;min-height:42px;font-size:14px}
+.go-v{background:var(--accent-soft);color:var(--accent)}
+.go-a{background:var(--audio-soft);color:var(--audio)}
+.go-v:hover,.go-a:hover{filter:brightness(.97)}
+@media (max-width:440px){.preview{grid-template-columns:1fr}.preview>img{max-width:100%}.preview.poster{grid-template-columns:88px 1fr}}
+
+/* messages */
 .msg{border-radius:12px;padding:10px 12px;font-size:14px}
-.msg.err{background:var(--bad-soft);color:var(--bad)}.msg.info{background:var(--accent-soft);color:var(--ink)}
-.empty{color:var(--muted);font-size:14px;text-align:center;padding:22px}
+.msg.err{background:var(--bad-soft);color:var(--bad)}
+.msg.info{background:var(--accent-soft);color:var(--ink)}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:26px 12px}
 
-/* download log */
-h2{font:600 17px/1 var(--disp);margin:32px 0 12px;display:flex;justify-content:space-between;align-items:center}
-.job{padding:13px 14px;border-radius:14px}
+/* results: a list of rows */
+.results{display:flex;flex-direction:column;gap:2px}
+.row{display:grid;grid-template-columns:168px 1fr;gap:14px;padding:10px;border-radius:var(--r);align-items:start}
+.row:hover{background:var(--surface)}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--sunk);max-width:100%}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .spec{position:absolute;bottom:6px;inset-inline-start:6px;background:var(--scrim);color:var(--on-scrim);font:500 11.5px/1 var(--mono);padding:4px 6px;border-radius:6px}
+.row.pl .thumb{box-shadow:-5px -5px 0 -1px var(--line),-10px -10px 0 -2px var(--sunk);margin-top:10px;margin-inline-end:10px;overflow:visible}
+.row.pl .thumb img{border-radius:10px}
+.info{min-width:0;display:flex;flex-direction:column;gap:4px}
+.ttl{font-weight:600;font-size:15px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.sub{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.chip{border:0;border-radius:10px;min-height:36px;padding:0 12px;font-weight:600;font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
+.chip:disabled{opacity:.5;cursor:default}
+.chip svg.i{width:16px;height:16px}
+@media (max-width:520px){.row{grid-template-columns:128px 1fr;gap:12px;padding:8px}.ttl{font-size:14px}.acts .chip{padding:0 10px}}
+
+/* Kan: series posters */
+.posters{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:16px 12px}
+.poster-card{border:0;background:none;padding:0;text-align:start;display:flex;flex-direction:column;gap:8px}
+.poster-card .art{aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:var(--sunk);max-width:100%;transition:transform .15s ease}
+.poster-card:hover .art{transform:translateY(-2px)}
+.poster-card img{width:100%;height:100%;object-fit:cover;display:block}
+.poster-card .ttl{font-size:14px}
+
+/* Kan: episodes */
+.kview{display:flex;flex-direction:column;gap:12px}
+.khead{display:flex;align-items:center;gap:10px}
+.khead h2{font:700 34px/.95 var(--display);margin:0;flex:1;min-width:0;text-wrap:balance}
+.seasons{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.seasons button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:13.5px;white-space:nowrap;color:var(--muted)}
+.seasons button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.eps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.ep{display:grid;grid-template-columns:28px 112px 1fr auto;gap:12px;align-items:center;padding:8px;border-radius:12px}
+.ep:hover{background:var(--surface)}
+.ep .n{font:500 13px/1 var(--mono);color:var(--muted);text-align:center}
+.ep img,.ep .ph{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--sunk);display:block}
+.ep .acts{margin:0;flex-wrap:nowrap}
+.ep .chip{min-height:40px;width:44px;padding:0;justify-content:center}
+.ep .chip .lbl{display:none}
+@media (max-width:520px){.ep{grid-template-columns:22px 88px 1fr;row-gap:8px}.ep img,.ep .ph{width:88px}.ep .acts{grid-column:2/-1}.ep .chip{flex:1;width:auto}.ep .chip .lbl{display:inline}}
+
+/* downloads */
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sec-h h2{font:700 34px/.9 var(--display);margin:0}
 .jobs{display:flex;flex-direction:column;gap:10px}
-.job .top{display:flex;gap:10px;align-items:flex-start}
-.job .src{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.job .sub{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center}
-.tag{font:500 11.5px/1 var(--body);padding:4px 8px;border-radius:6px;background:var(--sunk);color:var(--muted);font-variant-numeric:tabular-nums}
-.when{color:var(--muted);font-size:12px}
-.badge{font:600 12px/1 var(--body);padding:5px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
-.b-run{background:var(--warn-soft);color:var(--warn)}.b-ok{background:var(--ok-soft);color:var(--ok)}.b-bad{background:var(--bad-soft);color:var(--bad)}.b-wait{background:var(--sunk);color:var(--muted)}
-.step{font-size:13px;color:var(--muted);margin-top:10px}
-.bar{height:5px;background:var(--sunk);border-radius:99px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
-.jactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
-.jactions a,.jactions .done{flex:1 1 auto;text-align:center;text-decoration:none;border-radius:10px;padding:11px 12px;font:600 14px/1 var(--disp)}
-a.dl{background:var(--accent);color:var(--accent-ink)}a.lnk{background:var(--sunk);color:var(--ink)}
-.done{background:var(--ok-soft);color:var(--ok)}
-pre.sum{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 ui-monospace,Consolas,monospace;background:var(--sunk);border-radius:10px;padding:10px;margin:10px 0 0;max-height:200px;overflow:auto}
-.foot{color:var(--muted);font-size:12.5px;text-align:center;margin-top:26px;line-height:1.75}
+.job{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
+.jtop{display:flex;gap:10px;align-items:flex-start}
+.jtop .info{flex:1}
+.jtop .ttl{-webkit-line-clamp:2;font-size:14.5px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag{font:500 11.5px/1 var(--mono);padding:4px 7px;border-radius:6px;background:var(--sunk);color:var(--muted)}
+.when{font-size:12px;color:var(--muted)}
+.pill{font-weight:600;font-size:12px;padding:5px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.p-run{background:var(--warn-soft);color:var(--warn)}.p-ok{background:var(--ok-soft);color:var(--ok)}.p-bad{background:var(--bad-soft);color:var(--bad)}.p-wait{background:var(--sunk);color:var(--muted)}
+
+/* the route: sent -> downloading -> to Drive -> done */
+.route{display:grid;grid-template-columns:repeat(4,1fr);position:relative;padding-top:2px}
+.route::before{content:"";position:absolute;top:8px;inset-inline:12.5%;height:2px;background:var(--line)}
+.route .fill{position:absolute;top:8px;inset-inline-start:12.5%;height:2px;background:var(--accent);transition:width .5s ease}
+.stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:var(--muted);text-align:center}
+.stop i{width:14px;height:14px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:block;margin-top:1px}
+.stop.done i{background:var(--accent);border-color:var(--accent)}
+.stop.now i{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);animation:pulse 1.4s ease-in-out infinite}
+.stop.now{color:var(--ink);font-weight:600}
+.stop.fail i{background:var(--bad);border-color:var(--bad)}
+.stop.fail{color:var(--bad);font-weight:600}
+.job.ok .stop.done:last-child i{background:var(--ok);border-color:var(--ok)}
+@keyframes pulse{50%{box-shadow:0 0 0 7px transparent}}
+.why{font-size:13.5px;color:var(--bad);background:var(--bad-soft);border-radius:10px;padding:8px 10px}
+.warn{font-size:13px;color:var(--warn);background:var(--warn-soft);border-radius:10px;padding:8px 10px}
+.jact{display:flex;gap:8px;flex-wrap:wrap}
+.jact a,.jact .saved{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;border-radius:11px;min-height:42px;padding:0 14px;font-weight:600;font-size:14px}
+a.dl{background:var(--accent);color:var(--accent-ink)}
+a.lnk{background:var(--sunk);color:var(--ink);flex:0 0 auto}
+.saved{background:var(--ok-soft);color:var(--ok)}
+details.sum summary{cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none}
+details.sum summary::-webkit-details-marker{display:none}
+details.sum pre{white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.5 var(--mono);background:var(--sunk);border-radius:10px;padding:10px;margin:8px 0 0;max-height:220px;overflow:auto}
+.foot{color:var(--muted);font-size:12.5px;line-height:1.8;margin:0}
+
 @keyframes spin{to{transform:rotate(360deg)}}
-.spin{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
-@media (prefers-reduced-motion:reduce){.spin{animation:none}.res,.btn{transition:none}.res:hover{transform:none}}
-@media (max-width:420px){.shelf{grid-template-columns:1fr 1fr;gap:12px}.settings{gap:12px}}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@media (prefers-reduced-motion:reduce){.spin,.stop.now i{animation:none}.btn,.poster-card .art,.route .fill{transition:none}}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/></symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 7h11M4 12h11M4 17h7M18 14v6M15 17h6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5M10 16l-4-4 4-4M6 12h10"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+</svg>
 <div class="wrap">
-  <header>
-    <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6.5l8 5.5-8 5.5v-11z" fill="#fff"/></svg></div>
-    <div class="grow"><h1>YouTube לדרייב</h1><p>מחפשים, בוחרים איכות, והקובץ נוחת בגוגל דרייב</p></div>
-    <button id="logout" class="chipbtn" hidden>יציאה</button>
+  <header class="top">
+    <div class="brand"><b>ל<em>דרייב</em></b><span>יוטיוב · כאן · 13 ← גוגל דרייב</span></div>
+    <button id="logout" class="iconbtn" type="button" aria-label="יציאה" title="יציאה" hidden><svg class="i"><use href="#i-out"/></svg></button>
   </header>
 
-  <section id="loginView" class="panel stack" hidden>
-    <label for="pw" class="label">סיסמה</label>
-    <input id="pw" class="field" type="password" autocomplete="current-password" enterkeyhint="go">
-    <button id="loginBtn" class="btn primary">כניסה</button>
+  <section id="loginView" class="login" hidden>
+    <h1>כניסה</h1>
+    <p>האתר פרטי. הסיסמה נשמרת במכשיר הזה ל-30 יום.</p>
+    <label for="pw" class="hint">סיסמה</label>
+    <div class="inbox"><input id="pw" type="password" autocomplete="current-password" enterkeyhint="go"></div>
+    <button id="loginBtn" class="btn primary" type="button">כניסה</button>
     <div id="loginMsg" class="msg err" hidden></div>
   </section>
 
-  <main id="appView" hidden>
-    <section class="panel stack">
-      <div class="seg" role="group" aria-label="סוג חיפוש" id="typeSeg">
+  <main id="appView" class="wrap" style="padding:0" hidden>
+    <section class="composer" aria-label="חיפוש">
+      <div class="tabs" role="group" aria-label="איפה לחפש" id="typeSeg">
         <button type="button" data-type="video" aria-pressed="true">סרטונים</button>
         <button type="button" data-type="playlist" aria-pressed="false">פלייליסטים</button>
         <button type="button" data-type="kan" aria-pressed="false">כאן</button>
+        <button type="button" data-type="c13" aria-pressed="false">13</button>
       </div>
-      <form id="searchForm" class="row" autocomplete="off">
-        <input id="q" class="field" type="search" placeholder="חיפוש ביוטיוב…" enterkeyhint="search" spellcheck="false">
+      <form id="searchForm" class="searchrow" autocomplete="off">
+        <div class="inbox">
+          <svg class="i"><use href="#i-search"/></svg>
+          <input id="q" type="search" size="1" placeholder="סרטון, או קישור" enterkeyhint="search" spellcheck="false" aria-label="חיפוש או קישור">
+          <button type="button" class="clear" id="clearQ" aria-label="ניקוי" hidden><svg class="i"><use href="#i-x"/></svg></button>
+        </div>
         <button class="btn primary" id="searchBtn" type="submit">חפש</button>
       </form>
-
-      <div class="settings">
-        <div class="grp"><span class="label">איכות וידאו</span>
-          <div class="seg" role="group" aria-label="איכות" id="qualSeg">
-            <button type="button" data-q="best">מיטבית</button>
-            <button type="button" data-q="1080">1080p</button>
-            <button type="button" data-q="720">720p</button>
-            <button type="button" data-q="480">480p</button>
-          </div>
-        </div>
-        <div class="grp"><span class="label">פריטים בפלייליסט</span>
-          <div class="seg" role="group" aria-label="מספר פריטים בפלייליסט" id="maxSeg">
-            <button type="button" data-max="10">10</button>
-            <button type="button" data-max="25">25</button>
-            <button type="button" data-max="50">50</button>
-            <button type="button" data-max="100">100</button>
-          </div>
-        </div>
-        <span class="label" style="flex-basis:100%">MP3 יוצא תמיד באיכות הגבוהה ביותר. בפלייליסט יורדים הפריטים הראשונים לפי הסדר.</span>
+      <div class="opts">
+        <label class="opt" for="qualSel">איכות וידאו
+          <select id="qualSel"><option value="best">מיטבית</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select>
+        </label>
+        <label class="opt" for="maxSel">פריטים מרשימה
+          <select id="maxSel"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
+        </label>
       </div>
-
-      <details class="paste">
-        <summary>או הדבק קישור ישיר ⤵</summary>
-        <div class="stack">
-          <textarea id="url" class="field" placeholder="https://youtube.com/watch?v=…  או  playlist?list=…" spellcheck="false"></textarea>
-          <div id="preview" class="preview" hidden></div>
-          <label class="check" id="plWrap" hidden><input type="checkbox" id="plAll"> <span id="plLabel">להוריד את כל הפלייליסט</span></label>
-          <div class="row">
-            <button class="btn soft" style="flex:1" data-paste="video">🎬 וידאו</button>
-            <button class="btn soft" style="flex:1" data-paste="audio">🎵 MP3</button>
-          </div>
-        </div>
-      </details>
-
+      <div id="preview" class="preview" hidden></div>
       <div id="msg" class="msg info" hidden></div>
-      <div id="shelf" class="shelf" hidden></div>
-      <section id="kanView" class="kview" hidden>
-        <div class="kview-head">
-          <button type="button" id="kanBack" class="chipbtn">→ לתוצאות</button>
-          <h3 id="kanTitle"></h3>
-        </div>
-        <div id="kanSeasons" class="seg" role="group" aria-label="עונות" hidden></div>
-        <div class="row" id="kanAll" hidden>
-          <button type="button" class="btn soft" style="flex:1" data-kanall="video">🎬 כל העונה</button>
-          <button type="button" class="btn soft" style="flex:1" data-kanall="audio">🎵 כל העונה (MP3)</button>
-        </div>
-        <p class="label" id="kanNote" hidden></p>
-        <ul id="kanEps" class="eplist"></ul>
-      </section>
-      <div id="searchEmpty" class="empty" hidden></div>
     </section>
 
-    <h2>ההורדות שלי <button id="refresh" class="chipbtn">רענן</button></h2>
-    <div id="jobs" class="jobs"><div class="panel empty">טוען…</div></div>
-    <p class="foot">ההורדה רצה בענן ולוקחת דקה־שתיים (פלייליסט — יותר). אפשר לסגור ולחזור.<br>כשדרייב מחובר הקבצים נוחתים בתיקייה "YouTube"; אחרת מורידים אותם מכאן. קבצים כאן נמחקים אחרי 14 יום.</p>
+    <section id="shelf" class="results" hidden></section>
+    <section id="kanView" class="kview" hidden>
+      <div class="khead">
+        <button type="button" id="kanBack" class="iconbtn" aria-label="חזרה לתוצאות" title="חזרה לתוצאות"><svg class="i"><use href="#i-back"/></svg></button>
+        <h2 id="kanTitle"></h2>
+      </div>
+      <div id="kanSeasons" class="seasons" role="group" aria-label="עונות" hidden></div>
+      <div class="pair" id="kanAll" hidden>
+        <button type="button" class="btn go-v" data-kanall="video"><svg class="i"><use href="#i-video"/></svg>כל העונה בווידאו</button>
+        <button type="button" class="btn go-a" data-kanall="audio"><svg class="i"><use href="#i-audio"/></svg>כל העונה ב-MP3</button>
+      </div>
+      <p class="hint" id="kanNote" hidden></p>
+      <ul id="kanEps" class="eps"></ul>
+    </section>
+    <div id="searchEmpty" class="empty" hidden></div>
+
+    <section class="jobs-sec" style="display:flex;flex-direction:column;gap:12px">
+      <div class="sec-h"><h2>ההורדות שלי</h2><button id="refresh" class="iconbtn" type="button" aria-label="רענון" title="רענון"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+      <div id="jobs" class="jobs"><div class="empty">טוען…</div></div>
+    </section>
+    <p class="foot">ההורדה רצה בענן. סרטון בודד לוקח דקה או שתיים, פלייליסט או עונה לוקחים יותר. אפשר לסגור את הדף ולחזור אחר כך.<br>הקבצים נשמרים בדרייב בתיקיות YouTube, Kan ו-13. ‏MP3 יוצא תמיד באיכות הגבוהה ביותר.</p>
   </main>
 </div>
 <script>
@@ -230,20 +288,22 @@ const $=id=>document.getElementById(id);let polling=null,lastJobs=[],canSearch=f
 const store={get(k,d){try{return localStorage.getItem(k)??d}catch{return d}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
 let searchType=store.get('ytType','video'),quality=store.get('ytQuality','1080'),maxItems=parseInt(store.get('ytMax','50'),10)||50;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ico=n=>`<svg class="i"><use href="#i-${n}"/></svg>`;
 async function api(path,opts={}){const r=await fetch(path,{credentials:'same-origin',...opts});let d={};try{d=await r.json()}catch{}
  if(r.status===401&&path!=='/api/login'){showLogin();throw new Error(d.error||'צריך להתחבר')}if(!r.ok)throw new Error(d.error||('שגיאה '+r.status));return d}
 function say(t,k='info'){const m=$('msg');m.textContent=t;m.className='msg '+k;m.hidden=!t}
 function showLogin(){$('loginView').hidden=false;$('appView').hidden=true;$('logout').hidden=true;stopPoll();setTimeout(()=>$('pw').focus(),50)}
 function showApp(){$('loginView').hidden=true;$('appView').hidden=false;$('logout').hidden=false;loadJobs()}
+const isLink=v=>/https?:\/\/|(^|\s)(www\.|m\.)?(youtube\.com|youtu\.be|kan\.org\.il|13tv\.co\.il)\//i.test(v);
 
-// segmented controls
-function paintSeg(){document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.type===searchType));
- document.querySelectorAll('#qualSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.q===quality));
- document.querySelectorAll('#maxSeg button').forEach(b=>b.setAttribute('aria-pressed',parseInt(b.dataset.max,10)===maxItems));
- $('q').placeholder=searchType==='kan'?'חיפוש סדרות בכאן…':(!canSearch?'חיפוש כבוי — הדבק קישור למטה':(searchType==='playlist'?'חיפוש פלייליסטים…':'חיפוש סרטונים…'))}
-$('typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;searchType=b.dataset.type;store.set('ytType',searchType);paintSeg();if($('q').value.trim())$('searchForm').requestSubmit()});
-$('qualSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;quality=b.dataset.q;store.set('ytQuality',quality);paintSeg()});
-$('maxSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;maxItems=parseInt(b.dataset.max,10)||50;store.set('ytMax',String(maxItems));paintSeg();showPreview(pasted);paintListChoice(pasted)});
+// tabs + options
+function paint(){document.querySelectorAll('#typeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.type===searchType));
+ $('qualSel').value=quality;$('maxSel').value=String(maxItems);
+ $('q').placeholder=searchType==='kan'?'סדרה בכאן, או קישור':searchType==='c13'?'סדרה ב-13, או קישור':(!canSearch?'הדבקת קישור של יוטיוב או כאן':(searchType==='playlist'?'פלייליסט, או קישור':'סרטון, או קישור'))}
+$('typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;searchType=b.dataset.type;store.set('ytType',searchType);paint();
+ const v=$('q').value.trim();if(v&&!isLink(v))$('searchForm').requestSubmit()});
+$('qualSel').addEventListener('change',()=>{quality=$('qualSel').value;store.set('ytQuality',quality)});
+$('maxSel').addEventListener('change',()=>{maxItems=parseInt($('maxSel').value,10)||50;store.set('ytMax',String(maxItems));if(pasted)showPreview(pasted);if(kanState)renderKan(kanState)});
 
 // login
 async function doLogin(){const b=$('loginBtn');b.disabled=true;$('loginMsg').hidden=true;
@@ -252,142 +312,165 @@ async function doLogin(){const b=$('loginBtn');b.disabled=true;$('loginMsg').hid
 $('loginBtn').onclick=doLogin;$('pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}catch{}showLogin()};
 
-// search
+// one field: a search, or a pasted link (then a preview card with the download buttons)
+let pasted=null,infoTimer=null;
+$('q').addEventListener('input',()=>{const v=$('q').value.trim();$('clearQ').hidden=!v;clearTimeout(infoTimer);
+ if(isLink(v)){pasted=null;infoTimer=setTimeout(()=>loadInfo(v),300)}else{pasted=null;$('preview').hidden=true}});
+$('clearQ').addEventListener('click',()=>{$('q').value='';$('clearQ').hidden=true;pasted=null;$('preview').hidden=true;say('');$('q').focus()});
 $('searchForm').addEventListener('submit',async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
- if(searchType!=='kan'&&!canSearch){say('החיפוש כבוי (אין מפתח YouTube). אפשר להדביק קישור ישיר.','err');return}
- const b=$('searchBtn');b.disabled=true;b.innerHTML='<span class="spin"></span>';say('');$('shelf').hidden=true;$('kanView').hidden=true;$('searchEmpty').hidden=true;
- try{const api_=searchType==='kan'?'/api/kan/search?q=':`/api/search?type=${searchType}&q=`;const{items}=await api(api_+encodeURIComponent(q));renderShelf(items||[])}
- catch(e){say(e.message,'err')}finally{b.disabled=false;b.textContent='חפש'}});
+ if(isLink(q)){clearTimeout(infoTimer);loadInfo(q);return}
+ if(searchType!=='kan'&&searchType!=='c13'&&!canSearch){say('החיפוש ביוטיוב כבוי כרגע. אפשר להדביק קישור ישיר.','err');return}
+ const b=$('searchBtn');b.disabled=true;b.innerHTML='<span class="spin"></span>';say('');$('shelf').hidden=true;$('kanView').hidden=true;$('searchEmpty').hidden=true;$('preview').hidden=true;
+ try{const u=searchType==='kan'?'/api/kan/search?q=':searchType==='c13'?'/api/c13/search?q=':`/api/search?type=${searchType}&q=`;const{items}=await api(u+encodeURIComponent(q));renderShelf(items||[])}
+ catch(err){say(err.message,'err')}finally{b.disabled=false;b.textContent='חפש'}});
+
 function renderShelf(items){const box=$('shelf');
- if(!items.length){$('searchEmpty').textContent='לא נמצאו תוצאות';$('searchEmpty').hidden=false;box.hidden=true;return}
- box.innerHTML=items.map(v=>{const pl=v.kind==='playlist';const lbl=esc(v.title);
-  if(v.kind==='kan')return `<article class="res poster">
-   <div class="thumb">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}</div>
-   <div class="meta"><div class="ttl">${lbl}</div><div class="ch">כאן</div></div>
-   <div class="acts"><button class="a-kan" data-kan="${esc(v.url)}" data-title="${lbl}">📺 פרקים</button></div></article>`;
-  return `<article class="res${pl?' pl':''}">
-   <div class="thumb">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}${v.duration?`<span class="spec">${esc(v.duration)}</span>`:''}</div>
-   <div class="meta"><div class="ttl">${lbl}</div><div class="ch">${esc(v.channel)}</div></div>
-   <div class="acts">
-    <button class="a-vid" data-url="${esc(v.url)}" data-fmt="video" data-pl="${pl?'yes':'no'}" data-label="${lbl}">🎬 ${pl?'כל הווידאו':'וידאו'}</button>
-    <button class="a-aud" data-url="${esc(v.url)}" data-fmt="audio" data-pl="${pl?'yes':'no'}" data-label="${lbl}">🎵 ${pl?'כל ה-MP3':'MP3'}</button>
-   </div></article>`}).join('');
+ if(!items.length){$('searchEmpty').textContent='לא נמצאו תוצאות. נסה מילה אחרת, או הדבק קישור.';$('searchEmpty').hidden=false;box.hidden=true;return}
+ if(items[0].kind==='kan'||items[0].kind==='series'){box.className='posters';
+  box.innerHTML=items.map(v=>`<button type="button" class="poster-card" data-kan="${esc(v.url)}" data-title="${esc(v.title)}">
+   <div class="art">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}</div><div class="ttl">${esc(v.title)}</div></button>`).join('')}
+ else{box.className='results';
+  box.innerHTML=items.map(v=>{const pl=v.kind==='playlist';const lbl=esc(v.title);
+   const spec=pl?(v.count!=null?`${v.count} סרטונים`:'פלייליסט'):v.duration;
+   return `<article class="row${pl?' pl':''}">
+    <div class="thumb">${v.thumb?`<img loading="lazy" src="${esc(v.thumb)}" alt="">`:''}${spec?`<span class="spec">${esc(spec)}</span>`:''}</div>
+    <div class="info"><div class="ttl">${lbl}</div><div class="sub">${esc(v.channel)}</div>
+     <div class="acts">
+      <button class="chip go-v" data-url="${esc(v.url)}" data-fmt="video" data-pl="${pl?'yes':'no'}" data-label="${lbl}">${ico('video')}${pl?'הכל בווידאו':'וידאו'}</button>
+      <button class="chip go-a" data-url="${esc(v.url)}" data-fmt="audio" data-pl="${pl?'yes':'no'}" data-label="${lbl}">${ico('audio')}${pl?'הכל ב-MP3':'MP3'}</button>
+     </div></div></article>`}).join('')}
  box.hidden=false}
-$('shelf').addEventListener('click',e=>{const k=e.target.closest('button[data-kan]');if(k){openKan(k.dataset.kan,k.dataset.title);return}
+$('shelf').addEventListener('click',e=>{const k=e.target.closest('[data-kan]');if(k){openKan(k.dataset.kan,k.dataset.title);return}
  const b=e.target.closest('button[data-url]');if(b)start(b.dataset.url,b.dataset.fmt,b.dataset.pl,b.dataset.label,b)});
 
-// Kan: the episodes of a series / season, with a download button per episode and for the whole season
+// Kan: episodes of a series / season
 let kanState=null;
 async function openKan(url,title){
  $('shelf').hidden=true;$('searchEmpty').hidden=true;$('kanView').hidden=false;$('kanTitle').textContent=title||'';
  $('kanSeasons').hidden=true;$('kanAll').hidden=true;$('kanNote').hidden=true;$('kanEps').innerHTML='<li class="empty">טוען פרקים…</li>';
  $('kanView').scrollIntoView({behavior:'smooth',block:'start'});
- try{kanState=await api('/api/kan/episodes?url='+encodeURIComponent(url));renderKan(kanState,title)}
+ try{kanState=await api('/api/episodes?url='+encodeURIComponent(url));renderKan(kanState,title)}
  catch(e){$('kanEps').innerHTML=`<li class="msg err">${esc(e.message)}</li>`}}
 function renderKan(d,fallbackTitle){
  $('kanTitle').textContent=d.title||fallbackTitle||'';
  const ss=d.seasons||[];$('kanSeasons').hidden=ss.length<2;
  $('kanSeasons').innerHTML=ss.map(s=>`<button type="button" data-season="${esc(s.url)}" aria-pressed="${s.url===d.season}">${esc(s.label)}</button>`).join('');
- const eps=d.episodes||[];$('kanAll').hidden=!eps.length;
- $('kanNote').hidden=!eps.length;
- $('kanNote').textContent=eps.length?`${eps.length} פרקים בעונה. "כל העונה" מוריד עד ${maxItems} פרקים ראשונים (הבורר "פריטים בפלייליסט"). תוכן כאן חסום מחוץ לישראל ולכן עובר בשרת ישראלי חינמי, שמוגבל לכ-30 פרקי וידאו ביום.`:'';
+ const eps=d.episodes||[];$('kanAll').hidden=!eps.length;$('kanNote').hidden=!eps.length;
+ $('kanNote').textContent=!eps.length?'':d.source==='13'
+  ?(d.latest?`${d.total} פרקים בעונה, מוצגים 100 האחרונים. "כל העונה" מוריד עד ${maxItems} מהאחרונים.`:`${eps.length} פרקים בעונה. "כל העונה" מוריד עד ${maxItems} פרקים ראשונים.`)+' ב-13 האיכות המרבית היא 720p.'
+  :`${eps.length} פרקים בעונה. "כל העונה" מוריד עד ${maxItems} פרקים ראשונים. התוכן של כאן זמין רק בישראל, אז הוא עובר דרך שרת ישראלי חינמי שמוגבל לכ-30 פרקי וידאו ביום.`;
  $('kanEps').innerHTML=eps.length?eps.map((e,i)=>`<li class="ep">
-   ${e.thumb?`<img loading="lazy" src="${esc(e.thumb)}" alt="">`:'<span></span>'}
-   <div class="epm"><div class="ttl">${esc(e.title)}</div><div class="ch">${esc(e.duration)}</div></div>
-   <div class="epb"><button class="a-vid" data-ep="${i}" data-fmt="video" aria-label="וידאו">🎬</button><button class="a-aud" data-ep="${i}" data-fmt="audio" aria-label="MP3">🎵</button></div></li>`).join(''):'<li class="empty">לא נמצאו פרקים בעונה הזו</li>'}
+   <span class="n">${i+1}</span>
+   ${e.thumb?`<img loading="lazy" src="${esc(e.thumb)}" alt="">`:'<span class="ph"></span>'}
+   <div class="info"><div class="ttl">${esc(e.title)}</div><div class="sub">${esc(e.duration)}</div></div>
+   <div class="acts"><button class="chip go-v" data-ep="${i}" data-fmt="video" aria-label="וידאו" title="וידאו">${ico('video')}<span class="lbl">וידאו</span></button><button class="chip go-a" data-ep="${i}" data-fmt="audio" aria-label="MP3" title="MP3">${ico('audio')}<span class="lbl">MP3</span></button></div></li>`).join(''):'<li class="empty">לא נמצאו פרקים בעונה הזו</li>'}
 $('kanBack').addEventListener('click',()=>{$('kanView').hidden=true;$('shelf').hidden=$('shelf').innerHTML==='';});
 $('kanSeasons').addEventListener('click',async e=>{const b=e.target.closest('button[data-season]');if(!b)return;
  const keep=kanState&&kanState.title;$('kanEps').innerHTML='<li class="empty">טוען פרקים…</li>';
- try{const d=await api('/api/kan/episodes?url='+encodeURIComponent(b.dataset.season));d.title=keep||d.title;kanState=d;renderKan(d)}
+ try{const d=await api('/api/episodes?url='+encodeURIComponent(b.dataset.season));d.title=keep||d.title;kanState=d;renderKan(d)}
  catch(err){$('kanEps').innerHTML=`<li class="msg err">${esc(err.message)}</li>`}});
 $('kanEps').addEventListener('click',e=>{const b=e.target.closest('button[data-ep]');if(!b||!kanState)return;
  const ep=kanState.episodes[+b.dataset.ep];start(ep.url,b.dataset.fmt,'no',`${kanState.title} · ${ep.title}`,b)});
 $('kanAll').addEventListener('click',e=>{const b=e.target.closest('button[data-kanall]');if(!b||!kanState)return;
- const label=(kanState.seasons||[]).find(s=>s.url===kanState.season);start(kanState.season||kanState.url,b.dataset.kanall,'yes',`${kanState.title}${label?' · '+label.label:''} (כל העונה)`,b)});
+ const label=(kanState.seasons||[]).find(s=>s.url===kanState.season);start(kanState.season||kanState.url,b.dataset.kanall,'yes',`${kanState.title}${label?' · '+label.label:''} · כל העונה`,b)});
 
-// paste
-let pasted=null,infoTimer=null;
+// pasted link preview
 const isPlaylistUrl=u=>/youtube\.com\/playlist\?/i.test(u);
-// the "whole playlist" checkbox: shown for a video link that also carries a list (a pure playlist link always means the list)
-function paintListChoice(d){const v=$('url').value.trim();const has=/[?&]list=/.test(v)&&!isPlaylistUrl(v);$('plWrap').hidden=!has;
- if(!has)return;const n=d&&d.listCount!=null?d.listCount:null;
- $('plLabel').textContent='להוריד את כל הפלייליסט'+(d&&d.listTitle?` "${d.listTitle}"`:'')+
-  (n!=null?` (${n} סרטונים${n>maxItems?`, יורדים ${maxItems} הראשונים`:''})`:` (עד ${maxItems} הראשונים)`)}
-// preview card for a pasted link: thumbnail, title, channel; for a playlist link also how many videos it holds
-function showPreview(d){const box=$('preview');if(!d){box.hidden=true;return}box.className='preview';
+function showPreview(d){const box=$('preview');if(!d){box.hidden=true;return}
+ const lk=d.listKind||d.kanKind||'';const kanList=lk==='series'||lk==='season';
  const sub=[d.channel?esc(d.channel):''];
  if(d.count!=null)sub.push(`פלייליסט · ${d.count} סרטונים`+(d.count>maxItems?` · יורדים ${maxItems} הראשונים`:''));
- else if(isPlaylistUrl(d.url||''))sub.push('פלייליסט'+` · עד ${maxItems} הראשונים`);
- else if(d.kanKind==='series'||d.kanKind==='season')sub.push((d.kanKind==='series'?'סדרה':'עונה')+` · כל הפרקים, עד ${maxItems} הראשונים`);
- box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="ch">${sub.filter(Boolean).join(' · ')}</div></div>`;
- if(d.kanKind==='series'||d.kanKind==='season'){   // a Kan series/season link: offer picking single episodes
-  const b=document.createElement('button');b.type='button';b.className='btn soft';b.style.cssText='min-height:38px;margin-top:6px;font-size:13px';
-  b.textContent='📺 בחר פרקים';b.onclick=()=>openKan(d.url,d.title);box.querySelector('.pv').appendChild(b)}
+ else if(isPlaylistUrl(d.url||''))sub.push(`פלייליסט · עד ${maxItems} הראשונים`);
+ else if(kanList)sub.push((lk==='series'?'סדרה':'עונה')+` · עד ${maxItems} פרקים`);
+ const hasList=/[?&]list=/.test(d.url||'')&&!isPlaylistUrl(d.url||'');
+ const n=d.listCount!=null?d.listCount:null;
+ const listLbl='להוריד את כל הפלייליסט'+(d.listTitle?` "${esc(d.listTitle)}"`:'')+(n!=null?` (${n} סרטונים${n>maxItems?`, יורדים ${maxItems} הראשונים`:''})`:` (עד ${maxItems} הראשונים)`);
+ const all=kanList||isPlaylistUrl(d.url||'');
+ box.className='preview'+(kanList?' poster':'');
+ box.innerHTML=`${d.thumb?`<img src="${esc(d.thumb)}" alt="">`:''}<div class="pv"><div class="ttl">${esc(d.title)}</div><div class="sub">${sub.filter(Boolean).join(' · ')}</div>
+  ${hasList?`<label class="check"><input type="checkbox" id="plAll"> <span>${listLbl}</span></label>`:''}
+  <div class="pair">
+   <button type="button" class="btn go-v" data-paste="video">${ico('video')}${all?'הכל בווידאו':'וידאו'}</button>
+   <button type="button" class="btn go-a" data-paste="audio">${ico('audio')}${all?'הכל ב-MP3':'MP3'}</button>
+   ${kanList?`<button type="button" class="btn go-v" data-pick="1">${ico('list')}בחירת פרקים</button>`:''}
+  </div></div>`;
  box.hidden=false}
-$('url').addEventListener('input',()=>{const v=$('url').value.trim();paintListChoice(null);
- pasted=null;clearTimeout(infoTimer);if(!v){$('preview').hidden=true;return}infoTimer=setTimeout(()=>loadInfo(v),350)});
+$('preview').addEventListener('click',e=>{const p=e.target.closest('button[data-pick]');if(p&&pasted){openKan(pasted.url,pasted.title);return}
+ const b=e.target.closest('button[data-paste]');if(!b)return;const u=(pasted&&pasted.url)||$('q').value.trim();
+ const all=$('plAll')&&$('plAll').checked;const pl=isPlaylistUrl(u)||all?'yes':'no';start(u,b.dataset.paste,pl,(pasted&&pasted.title)||u,b)});
 async function loadInfo(v){const box=$('preview');
- try{const d=await api('/api/info?url='+encodeURIComponent(v));pasted=d;showPreview(d);paintListChoice(d)}
+ try{const d=await api('/api/info?url='+encodeURIComponent(v));if($('q').value.trim()!==v)return;pasted=d;showPreview(d)}
  catch(e){box.className='preview err';box.textContent=e.message;box.hidden=false}}
-document.querySelectorAll('button[data-paste]').forEach(b=>b.addEventListener('click',()=>{const u=(pasted&&pasted.url)||$('url').value.trim();if(!u){say('הדבק קישור','err');return}
- const pl=isPlaylistUrl(u)||$('plAll').checked&&!$('plWrap').hidden?'yes':'no';start(u,b.dataset.paste,pl,(pasted&&pasted.title)||u)}));
 
 // start a job
 async function start(url,format,playlist,label,btn){if(btn)btn.disabled=true;say('שולח…','info');
  try{const j=await api('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:url,options:{format,quality,playlist,max_items:maxItems}})});
-  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח! מופיע למטה ומתעדכן לבד.','info');await loadJobs()}
+  remember(j.id,{label:label||url,format,quality:j.quality,playlist:j.playlist,max:j.playlist==='yes'?j.max_items:null});say('נשלח. ההורדה מופיעה למטה ומתעדכנת לבד.','info');await loadJobs()}
  catch(e){say(e.message,'err')}finally{if(btn)btn.disabled=false}}
 
-// download log
+// downloads
 function metaAll(){try{return JSON.parse(store.get('ytJobs','{}'))}catch{return{}}}
 function remember(id,m){const all=metaAll();all[id]=m;store.set('ytJobs',JSON.stringify(all));
  lastJobs.unshift({id,input:m.label,status:'pending',created_at:new Date().toISOString()});render(lastJobs);startPoll()}
 function ago(iso){const s=(Date.now()-new Date(iso))/1000;if(s<60)return'עכשיו';if(s<3600)return`לפני ${Math.round(s/60)} דק׳`;if(s<86400)return`לפני ${Math.round(s/3600)} שע׳`;return new Date(iso).toLocaleDateString('he-IL')}
-function badge(j){if(j.status==='pending'||j.status==='queued')return'<span class="badge b-wait"><span class="spin"></span>ממתין</span>';
- if(j.status!=='completed')return'<span class="badge b-run"><span class="spin"></span>מוריד</span>';
- if(j.conclusion==='success')return'<span class="badge b-ok">מוכן ✓</span>';if(j.conclusion==='cancelled')return'<span class="badge b-bad">בוטל</span>';return'<span class="badge b-bad">נכשל</span>'}
+function pill(j){if(j.status==='pending'||j.status==='queued')return'<span class="pill p-wait"><span class="spin"></span>בתור</span>';
+ if(j.status!=='completed')return'<span class="pill p-run"><span class="spin"></span>בדרך</span>';
+ if(j.conclusion==='success')return`<span class="pill p-ok">${ico('check')}מוכן</span>`;if(j.conclusion==='cancelled')return'<span class="pill p-bad">בוטל</span>';return'<span class="pill p-bad">נכשל</span>'}
 function whyFailed(s){const r=(s.match(/reason: (.*)/)||[])[1]||'';
- if(/not made this video available in your country|not available in your country/i.test(r))return'הסרטון חסום מחוץ לישראל (למשל תוכן של כאן 11), והשרת בענן נמצא בחו"ל.';
- if(/could not find the Kan stream/i.test(r))return'לא נמצא סרטון בדף הזה של כאן. לרוב זה דף שאינו פרק (למשל כתבה או דף סדרה ריק).';
- if(/Kan relay not configured/i.test(r))return'השרת הישראלי לכאן לא מוגדר.';
- if(/private video/i.test(r))return'זה סרטון פרטי — אי אפשר להוריד אותו.';
- if(/HTTP Error 403|Forbidden/i.test(r))return'יוטיוב חסם את ההורדה הפעם (403). נסה שוב בעוד כמה דקות.';
- if(/confirm your age|age-restricted|inappropriate/i.test(r))return'לסרטון יש הגבלת גיל ויוטיוב דורש התחברות.';
- if(/members|join this channel/i.test(r))return'הסרטון זמין רק לחברי ערוץ.';
- if(/not a bot/i.test(r))return'יוטיוב חסם את השרת הפעם. נסה שוב בעוד כמה דקות.';
+ if(/not made this video available in your country|not available in your country/i.test(r))return'הסרטון חסום מחוץ לישראל, והשרת שמוריד נמצא בחו"ל.';
+ if(/could not find the Kan stream|no stream found/i.test(r))return'לא נמצא וידאו בדף הזה של כאן. בדרך כלל זה דף שאינו פרק, למשל כתבה.';
+ if(/Kan relay not configured/i.test(r))return'השרת הישראלי של כאן לא מוגדר.';
+ if(/13 catalogue|episodes for this 13/i.test(r))return'לא מצאתי פרקים בקישור הזה של 13. אפשר לחפש את הסדרה בלשונית 13.';
+ if(/private video/i.test(r))return'זה סרטון פרטי, ואי אפשר להוריד אותו.';
+ if(/HTTP Error 403|Forbidden/i.test(r))return'יוטיוב חסם את ההורדה הפעם. כדאי לנסות שוב בעוד כמה דקות.';
+ if(/confirm your age|age-restricted|inappropriate/i.test(r))return'לסרטון יש הגבלת גיל, ויוטיוב דורש התחברות.';
+ if(/members|join this channel/i.test(r))return'הסרטון זמין רק לחברי הערוץ.';
+ if(/not a bot/i.test(r))return'יוטיוב חסם את השרת הפעם. כדאי לנסות שוב בעוד כמה דקות.';
  if(/live event|premiere|is not currently live|will begin/i.test(r))return'זה שידור חי או בכורה שעוד לא הסתיימו.';
- if(/unavailable|removed|terminated/i.test(r))return'הסרטון לא זמין (הוסר, נחסם או מוגבל).';
- return r?('לא הצליח: '+r):'לא הצליח. "פרטים" מראה את הסיבה.'}
-const STEP={'Set up job':'מכין שרת','Install tools':'מכין כלים','Download':'מוריד מיוטיוב','Deliver':'שולח לדרייב','Publish result':'מסיים','Cleanup old files':'מסיים'};
-function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div class="panel empty">עוד אין הורדות — חפש משהו למעלה</div>';return}const M=metaAll();
+ if(/unavailable|removed|terminated/i.test(r))return'הסרטון לא זמין: הוסר, נחסם או מוגבל.';
+ return r?('ההורדה נכשלה: '+r):'ההורדה נכשלה. הסיבה מופיעה ב"פרטים".'}
+// which stop of the route a job is at: 0 sent, 1 downloading, 2 to Drive, 3 done
+const DELIVER_STEPS=/^(Deliver|Publish result|Cleanup old files|Post |Complete job)/;
+function stopOf(j,d){if(j.status==='pending'||j.status==='queued')return 0;
+ if(j.status!=='completed')return d.step&&DELIVER_STEPS.test(d.step)?2:1;
+ if(j.conclusion==='success')return 3;
+ return /delivered: FAILED/.test(d.summary||'')&&/^files:\n\s+\S/m.test(d.summary||'')?2:1}
+function route(j,d,drive){const at=stopOf(j,d),failed=j.status==='completed'&&j.conclusion!=='success';
+ const names=['נשלח','מוריד',drive===false?'מכין קובץ':'לדרייב','מוכן'];
+ const pct=Math.min(at,3)/3*75;
+ return `<div class="route" aria-label="מצב: ${names[at]}"><span class="fill" style="width:${failed?Math.max(0,at-1)/3*75:pct}%"></span>${names.map((n,i)=>{
+  const c=failed?(i<at?'done':i===at?'fail':''):(i<at||at===3?'done':i===at?'now':'');
+  return `<div class="stop ${c}"><i></i>${n}</div>`}).join('')}</div>`}
+function render(jobs){const box=$('jobs');if(!jobs.length){box.innerHTML='<div class="empty">עוד אין הורדות. חפש סרטון למעלה, או הדבק קישור.</div>';return}const M=metaAll();
  box.innerHTML=jobs.map(j=>{const d=details[j.id]||{};const m=M[j.id]||{};const src=m.label||j.input||'';let body='';
-  const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('פלייליסט'+(m.max?` · עד ${m.max}`:''));
-  if(j.status!=='completed'&&d.step){const pct=d.steps_total?Math.round(100*d.steps_done/d.steps_total):0;body+=`<div class="step">${esc(STEP[d.step]||d.step)}</div><div class="bar"><i style="width:${pct}%"></i></div>`}
-  if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));const drive=/Google Drive/i.test(d.summary||'');
-   body+='<div class="jactions">';
-   if(drive)body+='<span class="done">נשמר בגוגל דרייב ✓</span>';
-   else if(f)body+=`<a class="dl" href="${f.url}">⬇ ${/\.zip$/i.test(f.name)?'הורד את כל הקבצים (ZIP)':'הורד'} · ${(f.size/1048576).toFixed(1)}MB</a>`;
-   body+=`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">פרטים</a></div>`;
-   if(j.conclusion!=='success'&&!f)body=`<div class="step">${esc(whyFailed(d.summary||''))}</div>`+body;
-   if(/^warning: /m.test(d.summary||''))body+='<div class="step" style="color:var(--warn)">⚠ חלק מהפריטים בפלייליסט לא ירדו (פרטיים, שהוסרו, חסומים, או שגיאה זמנית של יוטיוב). אפשר לנסות שוב.</div>';
-   if(d.summary)body+=`<details style="margin-top:8px"><summary class="label" style="cursor:pointer">סיכום</summary><pre class="sum">${esc(d.summary)}</pre></details>`}
-  return `<div class="panel job"><div class="top"><div style="flex:1;min-width:0"><div class="src">${esc(src)}</div>
-   <div class="sub">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="when">${ago(j.created_at)}</span></div></div>${badge(j)}</div>${body}</div>`}).join('')}
+  const tags=[];if(m.format)tags.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)tags.push(m.quality==='best'?'מיטבית':m.quality+'p');if(m.playlist==='yes')tags.push('רשימה'+(m.max?` · עד ${m.max}`:''));
+  const drive=/Google Drive/i.test(d.summary||'')?true:(d.summary?false:null);
+  body+=route(j,d,drive);
+  if(j.status==='completed'){const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
+   if(j.conclusion!=='success'&&!f)body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
+   if(/^warning: /m.test(d.summary||''))body+='<div class="warn">חלק מהפריטים לא ירדו: פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.</div>';
+   body+='<div class="jact">';
+   if(drive===true)body+=`<span class="saved">${ico('check')}נשמר בגוגל דרייב</span>`;
+   else if(f)body+=`<a class="dl" href="${f.url}">${ico('down')}${/\.zip$/i.test(f.name)?'הורדת כל הקבצים (ZIP)':'הורדה'} · ${(f.size/1048576).toFixed(1)}MB</a>`;
+   body+=`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}פרטים</a></div>`;
+   if(d.summary)body+=`<details class="sum"><summary>סיכום טכני</summary><pre>${esc(d.summary)}</pre></details>`}
+  return `<article class="job${j.conclusion==='success'?' ok':''}"><div class="jtop"><div class="info"><div class="ttl">${esc(src)}</div>
+   <div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}<span class="when">${ago(j.created_at)}</span></div></div>${pill(j)}</div>${body}</article>`}).join('')}
 async function loadJobs(){try{const{jobs}=await api('/api/jobs');const known=new Set(jobs.map(j=>j.id));
   for(const p of lastJobs)if(!known.has(p.id)&&p.status==='pending')jobs.unshift(p);lastJobs=jobs;
   await Promise.all(jobs.slice(0,8).map(async j=>{if(j.status==='completed'&&details[j.id]&&details[j.id].status==='completed')return;
    if(j.status==='completed'||j.status==='in_progress'){try{details[j.id]=await api('/api/jobs/'+j.id)}catch{}}}));
   render(jobs);jobs.some(j=>j.status!=='completed')?startPoll():stopPoll()}
-  catch(e){if(!/להתחבר/.test(e.message))$('jobs').innerHTML=`<div class="panel msg err">${esc(e.message)}</div>`}}
+  catch(e){if(!/להתחבר/.test(e.message))$('jobs').innerHTML=`<div class="msg err">${esc(e.message)}</div>`}}
 function startPoll(){if(!polling)polling=setInterval(loadJobs,9000)}function stopPoll(){clearInterval(polling);polling=null}
 $('refresh').onclick=loadJobs;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('appView').hidden)loadJobs()});
 
 async function takeShared(){const q=new URLSearchParams(location.search);if(!q.has('share'))return;history.replaceState(null,'','/');
- if(q.get('share')==='text'){const t=q.get('text')||'';const m=t.match(/https?:\/\/\S+/);document.querySelector('details.paste').open=true;$('url').value=m?m[0]:t;$('url').dispatchEvent(new Event('input'))}}
-async function boot(){await takeShared();try{const me=await api('/api/me');canSearch=!!me.search;paintSeg();showApp()}
+ if(q.get('share')==='text'){const t=q.get('text')||'';const m=t.match(/https?:\/\/\S+/);$('q').value=m?m[0]:t;$('q').dispatchEvent(new Event('input'))}}
+async function boot(){await takeShared();try{const me=await api('/api/me');canSearch=!!me.search;paint();showApp()}
  catch(e){showLogin();if(!/להתחבר/.test(e.message)){$('loginMsg').textContent=e.message;$('loginMsg').hidden=false}}}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
-paintSeg();boot();
+paint();boot();
 </script>
 </body>
 </html>
