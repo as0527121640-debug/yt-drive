@@ -160,7 +160,8 @@ jobs:
               # Drive is configured: upload each item as soon as it is finished and delete it locally. A long video
               # playlist then never has to fit on the runner's ~14 GB disk, and a timeout or one failing item still
               # leaves everything finished so far in Drive.
-              curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+              # (rclone's installer exits 3 when rclone is already installed, so only run it when it is missing)
+              command -v rclone >/dev/null || { curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1; }
               mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
               COMMON+=(--exec "after_move:bash ./upload_one.sh {}")
             fi
@@ -235,7 +236,8 @@ jobs:
         id: deliver
         run: |
           if [ -n "$RCLONE_CONF_BASE64" ]; then
-            curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+            # playlists already installed it in the Download step; its installer exits 3 when rclone is present
+            command -v rclone >/dev/null || { curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1; }
             mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
             rclone copy out "gdrive:$DRIVE_DIR" --transfers 2
             echo "where=Google Drive / $DRIVE_DIR ($COUNT file(s))" >> "$GITHUB_OUTPUT"
