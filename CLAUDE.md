@@ -1,7 +1,7 @@
 # yt-drive
 
-Personal site: search YouTube or Kan (kan.org.il) - or paste a link - and the video / audio lands in the user's Google
-Drive. Free tiers only: a Cloudflare Worker is the always-on front door, a GitHub Actions workflow does the downloading
+Personal site: search YouTube, Kan (kan.org.il) or Reshet 13 (13tv.co.il) - or paste a link - and the video / audio lands
+in the user's Google Drive. Keshet 12 (mako) is not possible (bot wall with CAPTCHA, see `docs\LESSONS.md`). Free tiers only: a Cloudflare Worker is the always-on front door, a GitHub Actions workflow does the downloading
 (yt-dlp + rclone). This folder is its own project (own repo, own tooling, own docs); it does not depend on
 `C:\apk-lab`. The reusable pattern behind it is the user-level skill `cloud-job-site`
 (`~\.claude\skills\cloud-job-site`, generalised lessons in its `references\youtube-to-drive.md`).
@@ -23,7 +23,7 @@ Drive. Free tiers only: a Cloudflare Worker is the always-on front door, a GitHu
 ## Layout
 | Path | What |
 |---|---|
-| `worker\` | the site Worker: `src\index.js` (auth, search, previews, Kan index/episodes, job dispatch/status), `public\` (Hebrew RTL PWA page, service worker, manifest) |
+| `worker\` | the site Worker: `src\index.js` (auth, search, previews, Kan index/episodes, 13 catalogue via Kaltura OTT, job dispatch/status), `public\` (Hebrew RTL PWA page "לדרייב", service worker, manifest) |
 | `relay\` | `il-relay`: keyed, host-allowlisted fetch relay pinned to Cloudflare Tel Aviv (Kan streams are geo-gated to Israel) |
 | `.github\workflows\` | `yt-drive.yml` (download + deliver), `kan-index.yml` (daily catalogue refresh) |
 | `scripts\` | `build_kan_index.py`, `check.py` (static checks), `dev.mjs` (local dev server), `wr.mjs` (runs this project's wrangler in worker/ or relay/) |
