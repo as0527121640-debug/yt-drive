@@ -282,6 +282,8 @@ jobs:
           }
           case "$INPUT" in
             *kan.org.il*)
+              # Kan content goes to its own Drive folder (repo var KAN_DRIVE_DIR, default "Kan"), not into "YouTube"
+              DRIVE_DIR="${KAN_DRIVE_DIR:-Kan}"; export DRIVE_DIR; echo "DRIVE_DIR=$DRIVE_DIR" >> "$GITHUB_ENV"
               [ -n "$RELAY" ] && [ -n "$RELAY_KEY" ] || { echo "REASON=Kan relay not configured (RELAY_URL/RELAY_KEY)" >> "$GITHUB_ENV"; echo "::error::relay missing"; exit 1; }
               if printf '%s' "$INPUT" | grep -qE '/p-[0-9]+/(s[0-9]+/)?$'; then
                 # a whole season or series: expand to its episodes and download them one after another
