@@ -38,7 +38,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 .noscroll{scrollbar-width:none}.noscroll::-webkit-scrollbar{display:none}
 
 .wrap{padding-inline:var(--gut);padding-block:8px calc(var(--bar) + 28px + env(safe-area-inset-bottom,0px))}
-@media(min-width:900px){.wrap{padding-block:12px calc(var(--bar) + 40px);max-width:960px}}
+@media(min-width:900px){.wrap{padding-block:12px 40px}}   /* wide screen: the whole width, no bottom bar to clear */
 
 /* header */
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 14px}
@@ -156,6 +156,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 
 /* episodes */
 .kview .pair .btn{flex:1}
+@media(min-width:900px){.kview .pair .btn{flex:0 1 220px}}
 .eps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
 .ep{display:grid;grid-template-columns:auto 112px minmax(0,1fr);gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .ep .n{font-size:15px;font-weight:900;color:var(--muted);min-width:22px;text-align:center;font-variant-numeric:tabular-nums}
@@ -193,7 +194,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
   .side-tog{pointer-events:none}
   .side-x{display:grid}
   .side-body{padding:0 20px 20px}
-  body.docked .wrap{max-width:min(960px,calc(100% - var(--panel)))}
+  body.docked .wrap{margin-inline-end:var(--panel)}
 }
 @keyframes dock{from{opacity:0;transform:translateX(-12px)}}
 /* one download: a status mark, the title, one quiet line of facts; only a running one grows a progress bar */
