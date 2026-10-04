@@ -12,7 +12,11 @@
    `Kan/עלומים - פרק 2 - ילד, חסר לך משהו.mp3`; `YouTube/עלומים - פרק 1 - ...mp3` (early Kan test);
    `13/המעברה, עונה 2, פרק 7 שן תחת שן.mp3` (first 13 test, 2026-09-30); `13/המעברה/01 - ...mp3`, `02 - ...mp3` (13 season
    test, season 2 episodes 1-2). The progress tests (prog0001-0004, 2026-09-30) only re-wrote the 3 TED-Ed mp3 and the
-  13 episode mp3 above - no new files.
+  13 episode mp3 above - no new files. Season-folder tests (seas0001-0002, 2026-10-05):
+  `13/המעברה/עונה 1/09 - המעברה, עונה 1, פרק 8 - תחרות תחפושות.mp3` and `Kan/עלומים/עונה 1/01 - עלומים - פרק 1 - תמיד צריך לתת את הכאפה הראשונה.mp3`.
+   **Not test files:** `13/המעברה/` holds the user's own downloads of 2026-10-04 (season 2 `01`-`07`, season 1 `09`-`11`,
+   mp4, written before the season folders existed), and `13/המעברה/עונה 1/01`-`08` mp4 are the blocked items fetched
+   from the home PC on 2026-10-05.
 3. **Israel-only YouTube videos** cannot be downloaded for free (see `docs\LESSONS.md`). If it matters: a paid Israeli
    residential proxy as repo secret `YT_PROXY` (already supported, nothing to change in code).
 
@@ -34,6 +38,10 @@
 - The **rebuilt downloads panel (2026-10-01)**: side column opened from the header on a wide screen, bottom sheet on the phone, compact job rows with a "details" toggle. Tested locally at 1248 / 920 / 375 px with example jobs (running with percent, saving to Drive, queued, saved, saved with warning, failed, release file, cancelled) and real open / close clicks (header button, close button, Esc, bottom bar). Deployed; the live page serves the new code. Not seen yet with the real job list of the live site (needs the user's password).
 - Failure paths: a playlist with removed / private items (the "some items failed" warning), Kan season with a failing
   episode.
+- **Season folders (2026-10-05):** proved in the cloud on a 13 season (8 blocked items + 1 file in `עונה 1/09 - ...`,
+  notes "8 of 9 items" + the `not downloaded:` list) and on a Kan season (one item). Not run: a whole-series link
+  (several season folders in one run - only simulated locally) and the page's "N מתוך M פריטים לא ירדו" line on the
+  live site (the text was checked with node on the real notes; the live site needs the user's password).
 - **Live progress** (2026-09-30): proved in the cloud on a 13 episode (percent, size, speed, ETA, then "ExtractAudio")
   and seen on a real Kan video season (43%, 960 MB of 2.18 GB). Not seen live yet: the "item n of m" counter for
   YouTube playlists (the test run hit YouTube's bot check on every route - unrelated to progress) and the page itself

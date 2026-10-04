@@ -63,6 +63,19 @@ the next site of this kind, is the skill `cloud-job-site` (`references\youtube-t
   Tel Aviv (`baseEntry/action/getPlaybackContext` -> action type 1 = BLOCK, 0 sources; a home connection gets 2 sources).
   So it is not only a country check. The workflow reports these as "13 blocked" and goes on with the next episode. The
   only clean way to get them would be the user's own connection (e.g. a self-hosted runner at home).
+- **"The seasons overwrote each other" (2026-10-05) was not an overwrite.** Two season runs of "המעברה" wrote into one
+  folder with one running count each: season 2 gave `01`-`07`, season 1 only `09`-`11` (its first 8 items were blocked),
+  and the generic "some items failed" warning did not say how many. It read as one season with holes. Since then every
+  season has its own folder (`<series>/עונה N/`, numbered from 01) and the notes say "N of M items" and list them.
+  Look at the run log (`file name:` / `13 blocked:` / `OK via` lines) before believing a report about Drive.
+- **Blocked items do download from the home PC** (done 2026-10-05 for the 8 items of season 1): the same playManifest
+  URL answers 200 there, `yt-dlp -f "bv*+ba/b" --merge-output-format mp4` works (the PC has no pycryptodomex, so the
+  AES-128 stream goes through ffmpeg: one item ~6 min, no parallel fragments). They reached Drive through Google Drive
+  for desktop, which is installed on the PC (not auto-started; three accounts, the project's Drive is the `G:` one:
+  `G:\האחסון שלי\13\...`). rclone's `drive.file` scope does not see files that arrive this way, so a later cloud run of
+  the same item would add a second file with the same name instead of replacing it.
+- The OTT catalogue host (`5031.frp1.ott.kaltura.com`) sometimes resets every connection from the home PC (curl and
+  urllib alike, while the video CDN keeps working); `c13_list.py` cannot be tested locally then - use a cloud run.
 
 ## Keshet 12 (mako.co.il) - not supported
 - Episode pages redirect to a Radware bot wall with a CAPTCHA (`validate.perfdrive.com`), from curl and from a real

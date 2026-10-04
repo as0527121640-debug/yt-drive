@@ -69,8 +69,9 @@ Inputs: `input` (URL), `format` video|audio, `quality` best|1080|720|480 (defaul
    - With Drive configured, multi-item runs upload every finished item at once (`upload_one.sh`, `rclone moveto`) so the
      runner disk never holds a whole playlist / season and a timeout keeps what already finished.
 4. **Deliver** - Drive (rclone remote `gdrive`) or, without Drive, one release asset (several files -> one zip).
-5. **Publish result** - prerelease `job-<id>`: notes with source, format, `delivered:`, optional `reason:` / `warning:` and
-   the `files:` list. (The release already exists since the Download step - see live progress - so its notes are
+5. **Publish result** - prerelease `job-<id>`: notes with source, format, `delivered:`, optional `reason:` / `warning:`
+   (Kan / 13 season runs: `N of M items could not be downloaded` + a `not downloaded:` list, which the page shows as
+   "N מתוך M פריטים לא ירדו") and the `files:` list. (The release already exists since the Download step - see live progress - so its notes are
    replaced and the files uploaded; it is created here only if that early creation failed.)
 6. **Cleanup** - `job-*` releases older than 14 days are deleted.
 
@@ -94,11 +95,13 @@ YouTube/                                   (DRIVE_DIR, default "YouTube")
   <playlist title>/NN - <title>.mp4|mp3    playlist items, zero-padded NN
 Kan/                                       (KAN_DRIVE_DIR, default "Kan")
   <series> - <episode name>.mp4|mp3        one episode  (name = the page's JSON-LD "series | episode - subtitle")
-  <series>/NN - <series> - <episode>.ext   a season or series, NN = position in the download
+  <series>/עונה N/NN - <series> - <episode>.ext   a season or series: one folder per season, NN = position in the season
 13/                                        (C13_DRIVE_DIR, default "13")
   <asset name>.mp4|mp3                     one episode, e.g. "המעברה, עונה 2, פרק 7 - שן תחת שן"
-  <series>/NN - <asset name>.ext           a season or series
+  <series>/עונה N/NN - <asset name>.ext    a season or series (an item without a season number: <series>/NN - ...)
 ```
+NN counts the catalogue's items of that season from 01, so it is not always the episode number (season 1 of "המעברה"
+opens with a behind-the-scenes item: episode 1 is `02`). An item that failed keeps its number - the hole stays.
 Hebrew names are kept (`--windows-filenames`; yt-dlp turns `|` and `:` into the full-width `｜` `：`).
 
 ## Secrets and variables (names only - values are never in this repo)
