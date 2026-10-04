@@ -226,6 +226,7 @@ h1,h2,h3{margin:0;font-weight:900;text-wrap:balance;line-height:1.15}
 @media(prefers-reduced-motion:reduce){.prog .bar.ind i{animation:none;opacity:.6}.side{animation:none}}
 .why{font-size:13px;color:var(--bad);font-weight:500;line-height:1.4;margin-top:3px}
 .warn{font-size:13px;color:var(--warn);background:var(--warn-soft);padding:8px 10px;border-radius:6px;line-height:1.4;margin-top:5px}
+.skip{font-size:13px;color:var(--muted);line-height:1.4;margin-top:4px}
 .dl{display:inline-flex;align-self:flex-start;align-items:center;gap:6px;background:var(--ink);color:#000;text-decoration:none;font-weight:900;font-size:13px;min-height:34px;padding:0 12px;border-radius:6px;margin-top:6px}
 .jmore{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .jmore pre{margin:0;background:var(--bg);padding:10px;border-radius:6px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;direction:ltr;text-align:left;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
@@ -559,12 +560,14 @@ function jobCard(j,m){const d=details[j.id]||{},done=j.status==='completed',ok=d
  const drive=/Google Drive/i.test(d.summary||'');let body='';
  const meta=[];if(m.format)meta.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)meta.push(m.quality==='best'?'מיטבית':m.quality+'p');
  if(m.playlist==='yes')meta.push('רשימה'+(m.max?` עד ${m.max}`:''));meta.push(ago(j.created_at));
- const st=!done?'':ok?(drive?'<span class="st-ok">נשמר בדרייב</span> · ':''):j.conclusion==='cancelled'?'בוטל · ':'<span class="st-bad">נכשל</span> · ';
+ const sk=+((d.summary||'').match(/^skipped: (\d+)/m)||[])[1]||0,none=sk&&/^delivered: Google Drive[^\n]*\(0 file/m.test(d.summary||'');   // items Drive already had
+ const st=!done?'':ok?(drive?`<span class="st-ok">${none?'כבר בדרייב':'נשמר בדרייב'}</span> · `:''):j.conclusion==='cancelled'?'בוטל · ':'<span class="st-bad">נכשל</span> · ';
  if(!done)body+=progress(j,d,m);
  else{const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
   if(!ok&&!f&&j.conclusion!=='cancelled')body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
   const w=(d.summary||'').match(/^warning: (?:(\d+) of (\d+) )?/m);   // "N of M items ..." when the run knows which ones
   if(w)body+=`<div class="warn">${w[1]?`${w[1]} מתוך ${w[2]} פריטים לא ירדו`:'חלק מהפריטים לא ירדו'}${/13tv\.co\.il/.test(j.input||'')?'. רשת 13 חוסמת אותם להורדה מחוץ לחיבור ביתי, וזה קורה בעיקר בפרקים ישנים.':': פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.'}${w[1]?' הרשימה ב"פרטים".':''}</div>`;
+  if(sk)body+=`<div class="skip">${none?(sk===1?'הפריט כבר היה בדרייב, ולא הורדתי אותו שוב.':`כל ${sk} הפריטים כבר היו בדרייב, ולא הורדתי אותם שוב.`):(sk===1?'פריט אחד כבר היה בדרייב, ודילגתי עליו.':`${sk} פריטים כבר היו בדרייב, ודילגתי עליהם.`)}</div>`;
   if(f&&!drive)body+=`<a class="dl" href="${f.url}">${ico('down')}${/\.zip$/i.test(f.name)?'הורדת כל הקבצים (ZIP)':'הורדה'} · ${(f.size/1048576).toFixed(1)}MB</a>`}
  const hasMore=!!(d.summary||j.run_url);
  if(open&&hasMore)body+=`<div class="jmore">${d.summary?`<pre>${esc(d.summary)}</pre>`:''}${j.run_url?`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}הריצה בגיטהאב</a>`:''}</div>`;

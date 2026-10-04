@@ -157,9 +157,11 @@ jobs:
           name = re.sub(r"\s+", " ", name).strip(" .-")
           print(name[:110].rstrip(" .-"))
           PY
-          # Kan season / series page -> its episode pages. Line 1 = the series name, then one episode URL per line, in
-          # order (a series = all its seasons, season 1 first), at most $2. curl, not urllib: Kan's bot protection
-          # answers Python's HTTP client with 403.
+          # Kan series / season / episode page -> its episode pages. Line 1 = the series name, then
+          # "url<TAB>season<TAB>position in the season" per episode, in order (a series = all its seasons, season 1 first),
+          # at most $2. An episode link reads its season page for the series name and its position, so a single episode
+          # gets the same place as in a season run. curl, not urllib: Kan's bot protection answers Python's HTTP client
+          # with 403.
           cat > kan_list.py <<'PY'
           import html, os, re, subprocess, sys
           UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -180,26 +182,41 @@ jobs:
                   if t:
                       return t
               return ""
-          url, limit = sys.argv[1], int(sys.argv[2])
-          page = curl(url)
-          urls = []
-          if re.search(r"/s\d+/?$", url):
-              urls = episodes(page)                       # one season
+          items = []
+          def add(eps, season=None):
+              count = {}
+              for u in eps:
+                  s = season if season is not None else int(re.search(r"/s(\d+)/\d+/$", u).group(1))
+                  count[s] = count.get(s, 0) + 1
+                  items.append((u, s, count[s]))
+          url, limit = re.sub(r"[?#].*$", "", sys.argv[1]), int(sys.argv[2])
+          url = re.sub(r"^https?://(www\.)?kan\.org\.il", "https://www.kan.org.il", url)
+          one = re.search(r"^(.*/p-\d+/s(\d+)/)(\d+)/?$", url)
+          if one:
+              page = curl(one.group(1))                   # one episode: its season page
+              eps, me = episodes(page), one.group(0).rstrip("/") + "/"
+              items = [(me, int(one.group(2)), eps.index(me) + 1 if me in eps else 0)]
+          elif re.search(r"/s\d+/?$", url):
+              page = curl(url)                            # one season
+              add(episodes(page), int(re.search(r"/s(\d+)/?$", url).group(1)))
           else:
+              page = curl(url)
               seasons = sorted({(int(n), u) for u, n in SEASON.findall(page)})
               if seasons:
-                  for _, u in seasons:                    # every season, season 1 first
-                      urls += episodes(curl(u))
+                  for n, u in seasons:                    # every season, season 1 first
+                      add(episodes(curl(u)), n)
               else:
-                  urls = episodes(page) or episodes(curl(url.rstrip("/") + "/s1/"))
+                  add(episodes(page) or episodes(curl(url.rstrip("/") + "/s1/")))
           print(program(page))
-          for u in list(dict.fromkeys(urls))[:limit]:
-              print(u)
+          seen = set()
+          for u, s, n in [x for x in items if not (x[0] in seen or seen.add(x[0]))][:limit]:
+              print("%s\t%d\t%d" % (u, s, n))
           PY
-          # Reshet 13 URL (the Worker's canonical shape) -> line 1 = the series name, then "entryId<TAB>season<TAB>title"
-          # per episode (season 0 = the item has none), at most $2. The catalogue is Kaltura OTT (partner 5031) with an
-          # anonymous session, as the 13tv.co.il player uses; ordering matches the Worker's list (by episode number; a
-          # season of 100+ gives the latest first).
+          # Reshet 13 URL (the Worker's canonical shape) -> line 1 = the series name (a single episode too), then
+          # "entryId<TAB>season<TAB>number<TAB>title" per episode, at most $2 (season 0 = none; number = the catalogue's
+          # EpisodeNumber, else the position in the season, 0 = unknown). The catalogue is Kaltura OTT (partner 5031)
+          # with an anonymous session, as the 13tv.co.il player uses; ordering matches the Worker's list (by episode
+          # number; a season of 100+ gives the latest first).
           cat > c13_list.py <<'PY'
           import json, re, sys, urllib.parse, urllib.request
           B = "https://5031.frp1.ott.kaltura.com/api_v3/service/"
@@ -229,14 +246,23 @@ jobs:
           path = urllib.parse.urlparse(url).path
           m = re.search(r"/series/(\d+)(?:/season/(\d+)(?:/(\d+))?)?/?$", path)
           a = re.search(r"^/allshows/(\d+)/?$", path)
+          def series_name(sid):
+              s = lst("(and SeriesID='%s' asset_type='1259')" % sid, 1, props="id,name").get("objects") or []
+              return s[0]["name"] if s else ""
+          def number(v):
+              try:
+                  return int(float(v))
+              except (TypeError, ValueError):
+                  return 0
           title, eps = "", []
           if (m and m.group(3)) or a:
               eps = [call("asset/action/get", {"ks": ks, "id": m.group(3) if m and m.group(3) else a.group(1),
                                                "assetReferenceType": "media"})]
+              sid = (m.group(1) if m else "") or meta(eps[0], "SeriesID")
+              title = series_name(sid) if sid else ""
           elif m:
               sid, season = m.group(1), m.group(2)
-              s = lst("(and SeriesID='%s' asset_type='1259')" % sid, 1, props="id,name").get("objects") or []
-              title = s[0]["name"] if s else ""
+              title = series_name(sid)
               if season:
                   eps = season_eps(sid, season)
               else:
@@ -251,14 +277,33 @@ jobs:
                   else:
                       eps = season_eps(sid, "")
           print(title)
+          count = {}
           for o in [e for e in eps if e.get("entryId")][:limit]:
               name = re.sub(r"\s*:\s*", " - ", re.sub(r"[\t\r\n]+", " ", o.get("name") or o["entryId"]))  # "פרק 7: שם" -> "פרק 7 - שם"
-              try:
-                  season = int(float(meta(o, "SeasonNumber")))
-              except (TypeError, ValueError):
-                  season = 0
-              print("%s\t%d\t%s" % (o["entryId"], season, name))
+              season = number(meta(o, "SeasonNumber"))
+              count[season] = count.get(season, 0) + 1
+              num = number(meta(o, "EpisodeNumber")) or (count[season] if len(eps) > 1 else 0)
+              print("%s\t%d\t%d\t%s" % (o["entryId"], season, num, name))
           PY
+          # Is this item already in Drive? $1 = folder, $2 = NN ('' = none), $3 = file name without NN and extension;
+          # have.txt = what rclone sees under the series folder and at the top of the Drive folder (relative to it).
+          # Exit 0 = yes: at its place, or where an older version of this workflow put it ("<series>/NN - name" before
+          # the season folders, "name" at the top for a single episode) - such a file is moved to its place first
+          # (server side, no download). Each hit is added to skipped.txt.
+          cat > in_drive.sh <<'SH'
+          want="${1:+$1/}${2:+$2 - }$3.$EXT"
+          [ -s have.txt ] || exit 1
+          if grep -Fxq -- "$want" have.txt; then printf '%s\n' "$want" >> skipped.txt; exit 0; fi
+          old=$(awk -v top="$3.$EXT" -v pre="${1%%/*}/" -v suf=" - $3.$EXT" '
+            $0 == top { print; exit }
+            index($0, pre) == 1 { r = substr($0, length(pre) + 1); k = length(r) - length(suf)
+              if (index(r, "/") == 0 && k > 0 && substr(r, k + 1) == suf && substr(r, 1, k) ~ /^[0-9]+$/) { print; exit } }' have.txt)
+          [ -n "$old" ] && [ -n "$1" ] || exit 1
+          rclone moveto "gdrive:${DRIVE_DIR}/$old" "gdrive:${DRIVE_DIR}/$want" --log-level ERROR || exit 1
+          echo "moved in Drive: $old -> $want"
+          printf '%s (moved from %s)\n' "$want" "$old" >> skipped.txt
+          { grep -Fxv -- "$old" have.txt; printf '%s\n' "$want"; } > have.tmp; mv have.tmp have.txt
+          SH
           # Per-item upload for playlists (used with yt-dlp --exec after_move): send the finished file to Drive, delete
           # the local copy, and record its path for the release notes.
           cat > upload_one.sh <<'SH'
@@ -281,7 +326,25 @@ jobs:
           [ "$MAX_ITEMS" -ge 1 ] || MAX_ITEMS=1
           [ "$MAX_ITEMS" -le 100 ] || MAX_ITEMS=100
           : > names.txt        # files already sent to Drive by the per-item upload (playlists only)
+          : > have.txt; : > skipped.txt     # what Drive already has / what this run skipped because of it
           STREAM=0             # 1 = upload each finished item to Drive right away (multi-item runs with Drive configured)
+          EXT=mp4; [ "$FORMAT" = audio ] && EXT=mp3; export EXT
+          # (rclone's installer exits 3 when rclone is already installed, so only run it when it is missing)
+          rclone_setup() {
+            [ -f ~/.config/rclone/rclone.conf ] && return 0
+            command -v rclone >/dev/null || { curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1; }
+            mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
+          }
+          # A repeat run skips what Drive already has. have.txt = the files under $1 (series / playlist folder) and at
+          # the top of the Drive folder, as paths relative to it. rclone's drive.file scope sees only files and folders
+          # rclone created: whatever was put into Drive another way is not seen (and is downloaded again).
+          drive_list() {
+            [ -n "$RCLONE_CONF_BASE64" ] || return 0
+            rclone_setup
+            if [ -n "$1" ]; then rclone lsf -R --files-only "gdrive:${DRIVE_DIR}/$1" 2>/dev/null | awk -v p="$1/" '{ print p $0 }' >> have.txt || true; fi
+            rclone lsf --files-only "gdrive:${DRIVE_DIR}" 2>/dev/null >> have.txt || true
+            echo "Drive: $(wc -l < have.txt) file(s) under '$DRIVE_DIR/$1' and at its top"
+          }
           if [ "$PLAYLIST" = "yes" ]; then
             # zero-padded index so item 10 sorts after item 02 in Drive
             # --download-archive: when a retry uses the next player client, items that already finished are skipped
@@ -290,11 +353,26 @@ jobs:
               # Drive is configured: upload each item as soon as it is finished and delete it locally. A long video
               # playlist then never has to fit on the runner's ~14 GB disk, and a timeout or one failing item still
               # leaves everything finished so far in Drive.
-              # (rclone's installer exits 3 when rclone is already installed, so only run it when it is missing)
-              command -v rclone >/dev/null || { curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1; }
-              mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
+              rclone_setup
               COMMON+=(--exec "after_move:bash ./upload_one.sh {}")
               STREAM=1
+              # YouTube: a quick look at the list (no download) gives each item's file name - same template and trimming
+              # as the download (--trim-filenames counts "out/" and the folder too), so the same name. The ids of the
+              # items Drive already has go into the download archive, and yt-dlp skips them. Kan / 13 check per item.
+              case "$INPUT" in *13tv.co.il*|*kan.org.il*) ;; *)
+                PX=(); [ "${ROUTES[0]}" != direct ] && PX=(--proxy "${ROUTES[0]}")
+                yt-dlp "${PX[@]}" --flat-playlist --yes-playlist --playlist-end "$MAX_ITEMS" --windows-filenames --trim-filenames 120 \
+                  -o "out/%(playlist_title|Playlist)s/%(playlist_index)02d - %(title)s.%(ext)s" -O "%(id)s %(filename)s" "$INPUT" > yt_names.txt 2>/dev/null || true
+                f=$(head -1 yt_names.txt | cut -d' ' -f2-); f=${f#out/}
+                if [ -n "$f" ]; then
+                  drive_list "${f%%/*}"
+                  while read -r id f; do
+                    f=${f#out/}; f="${f%.*}.$EXT"
+                    if grep -Fxq -- "$f" have.txt; then printf 'youtube %s\n' "$id" >> dl_archive.txt; printf '%s\n' "$f" >> skipped.txt; fi
+                  done < yt_names.txt
+                  echo "already in Drive: $(wc -l < skipped.txt) of $(wc -l < yt_names.txt) item(s)"
+                fi ;;
+              esac
             fi
           else
             COMMON+=(--no-playlist -o "out/%(title)s.%(ext)s")
@@ -304,8 +382,8 @@ jobs:
           MEDIA_NAMES=(-iname '*.mp4' -o -iname '*.mkv' -o -iname '*.webm' -o -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.opus' -o -iname '*.ogg' -o -iname '*.flac' -o -iname '*.wav' -o -iname '*.mov')
           media_count() { find out -type f \( "${MEDIA_NAMES[@]}" \) | wc -l; }
           prune_leftovers() { find out -type f ! \( "${MEDIA_NAMES[@]}" \) -delete; }
-          # true when media exists in out/, or items were already uploaded per-item
-          produced() { [ "$(media_count)" -gt 0 ] || [ -s names.txt ]; }
+          # true when media exists in out/, or items were already uploaded per-item, or Drive already had them
+          produced() { [ "$(media_count)" -gt 0 ] || [ -s names.txt ] || [ -s skipped.txt ]; }
           if [ "$FORMAT" = "audio" ]; then
             FMT=(-x --audio-format mp3 --audio-quality 0)
           else
@@ -339,16 +417,17 @@ jobs:
           # Worker that Cloudflare runs in Tel Aviv. The page HTML is reachable from anywhere - only the CDN streams are
           # geo-gated - so resolve the m3u8 from the page, then hand the relay-wrapped URL to yt-dlp.
           KAN_UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
-          # One episode page. $1 = page URL, $2 = folder inside out/ ('' for a single episode), $3 = index prefix ('' for
-          # a single episode). Returns 0 when its media file was written.
+          # One episode page. $1 = page URL, $2 = folder inside out/ ('' = top), $3 = index prefix ('' = none).
+          # Returns 0 when its media file was written, 2 when Drive already has it.
           kan_episode() {
             local url="$1" dir="$2" idx="$3" page m3u8 enc wrapped safe target x
             page=$(curl -s -A "$KAN_UA" "$url")
+            safe=$(printf '%s' "$page" | PYTHONUTF8=1 python3 kan_name.py); [ -n "$safe" ] || safe="kan_$JOB_ID"
+            if bash ./in_drive.sh "$dir" "$idx" "$safe"; then echo "already in Drive: ${dir:+$dir/}${idx:+$idx - }$safe"; return 2; fi
             m3u8=$(printf '%s' "$page" | grep -oE 'https://[a-z0-9.-]*cdn-redge\.media/[^"<> \\]*playlist\.m3u8[^"<> \\]*' | sed 's/&amp;/\&/g' | head -1)
             if [ -z "$m3u8" ]; then echo "no stream found on: $url" | tee -a dl.log; return 1; fi
             enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$m3u8")
             wrapped="$RELAY/r/playlist.m3u8?k=$RELAY_KEY&u=$enc"
-            safe=$(printf '%s' "$page" | PYTHONUTF8=1 python3 kan_name.py); [ -n "$safe" ] || safe="kan_$JOB_ID"
             target="out/${dir:+$dir/}${idx:+$idx - }$safe"
             echo "file name: ${target#out/}"
             set +e
@@ -367,24 +446,23 @@ jobs:
             [ "$STREAM" = 1 ] || return 0
             find out -type f \( "${MEDIA_NAMES[@]}" \) -print0 | while IFS= read -r -d '' f; do bash ./upload_one.sh "$f"; done
           }
-          # Where an item of a season / series run goes: $1 = series folder, $2 = season number ('' or 0 = none). Sets
-          # $dir and $idx. Every season has its own folder and its own count from 01 - two seasons of one series used to
-          # share one folder and one running count, which read as a single season with holes (and Kan's "פרק 1" of two
-          # seasons could land on the same name).
-          slot_n=0; slot_prev=
-          season_slot() {
-            [ "$2" = "$slot_prev" ] || { slot_n=0; slot_prev=$2; }
-            slot_n=$((slot_n+1)); idx=$(printf '%02d' "$slot_n")
-            dir="$1"; case "$2" in ''|0) ;; *) dir="$1/עונה $2" ;; esac
+          # Where a Kan / 13 item goes: $1 = series folder ('' = the top of the Drive folder), $2 = season, $3 = number in
+          # the season (0 = none / unknown). Sets $dir = "<series>/עונה N" and $idx = "NN". A single episode and a season
+          # or series run put an episode at the same place, which is what lets a repeat run find it. (Two seasons in one
+          # folder with one running count used to read as a single season with holes.)
+          place() {
+            dir="$1"; idx=
+            [ -n "$1" ] || return 0
+            case "$2" in ''|0) ;; *) dir="$1/עונה $2" ;; esac
+            case "$3" in ''|0) ;; *) idx=$(printf '%02d' "$3") ;; esac
           }
           # ---- Reshet 13 ----
           # One episode by its Kaltura entryId. HLS only: the progressive mp4 renditions answer 404 everywhere, and the
           # HLS ladder tops out at 720p. Straight from the runner first; when that yields nothing (Israel-only content),
-          # again through il-relay (Kaltura is on its allowlist). $2 = folder, $3 = index prefix, $4 = the episode title.
+          # again through il-relay (Kaltura is on its allowlist). $2 = folder, $3 = index prefix, $4 = file name.
           c13_episode() {
-            local entry="$1" dir="$2" idx="$3" name="$4" master safe target url via x
+            local entry="$1" dir="$2" idx="$3" safe="$4" master target url via x
             master="https://cdnapisec.kaltura.com/p/2748741/sp/274874100/playManifest/entryId/$entry/format/applehttp/protocol/https/a.m3u8"
-            safe=$(printf '%s' "$name" | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$safe" ] || safe="13_$entry"
             target="out/${dir:+$dir/}${idx:+$idx - }$safe"
             echo "file name: ${target#out/}"
             for via in direct relay; do
@@ -414,46 +492,48 @@ jobs:
               if ! PYTHONUTF8=1 python3 c13_list.py "$INPUT" "$MAX_ITEMS" > c13_eps.txt; then
                 echo "REASON=could not read the 13 catalogue for this link" >> "$GITHUB_ENV"; echo "::error::13 list failed"; exit 1
               fi
-              series_dir=$(head -1 c13_eps.txt | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$series_dir" ] || series_dir="13"
               total=$(( $(wc -l < c13_eps.txt) - 1 ))
+              series_dir=$(head -1 c13_eps.txt | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$series_dir" ] || [ "$total" -lt 2 ] || series_dir="13"
               echo "13: $total episode(s) of '$series_dir' (limit $MAX_ITEMS)"
               if [ "$total" -lt 1 ]; then echo "REASON=could not find episodes for this 13 link" >> "$GITHUB_ENV"; echo "::error::no episodes"; exit 1; fi
-              i=0; c13_failed=0
-              while IFS=$'\t' read -r entry season name; do
+              drive_list "$series_dir"
+              i=0
+              while IFS=$'\t' read -r entry season num name; do
                 i=$((i+1))
                 echo "::group::13 episode $i/$total"
-                if [ "$PLAYLIST" = yes ]; then
-                  season_slot "$series_dir" "$season"
-                  if c13_episode "$entry" "$dir" "$idx" "$name"; then kan_flush; else c13_failed=$((c13_failed+1)); printf '%s\n' "$name" >> failed.txt; fi
-                else
-                  c13_episode "$entry" "" "" "$name" || c13_failed=$((c13_failed+1))
-                fi
+                place "$series_dir" "$season" "$num"
+                safe=$(printf '%s' "$name" | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$safe" ] || safe="13_$entry"
+                if bash ./in_drive.sh "$dir" "$idx" "$safe"; then echo "already in Drive: ${dir:+$dir/}${idx:+$idx - }$safe"
+                elif c13_episode "$entry" "$dir" "$idx" "$safe"; then kan_flush
+                else printf '%s\n' "$name" >> failed.txt; fi
                 echo "::endgroup::"
               done < <(tail -n +2 c13_eps.txt)
-              [ "$PLAYLIST" = yes ] && rc=$c13_failed
               ;;
             *kan.org.il*)
               # Kan content goes to its own Drive folder (repo var KAN_DRIVE_DIR, default "Kan"), not into "YouTube"
               DRIVE_DIR="${KAN_DRIVE_DIR:-Kan}"; export DRIVE_DIR; echo "DRIVE_DIR=$DRIVE_DIR" >> "$GITHUB_ENV"
               [ -n "$RELAY" ] && [ -n "$RELAY_KEY" ] || { echo "REASON=Kan relay not configured (RELAY_URL/RELAY_KEY)" >> "$GITHUB_ENV"; echo "::error::relay missing"; exit 1; }
-              if printf '%s' "$INPUT" | grep -qE '/p-[0-9]+/(s[0-9]+/)?$'; then
-                # a whole season or series: expand to its episodes and download them one after another
+              if printf '%s' "${INPUT%%[?#]*}" | grep -qE '/p-[0-9]+(/s[0-9]+(/[0-9]+)?)?/?$'; then
+                # a series, season or episode page: expand to its episodes (with season and position) and download them
+                # one after another
                 PYTHONUTF8=1 python3 kan_list.py "$INPUT" "$MAX_ITEMS" > kan_eps.txt
-                series_dir=$(head -1 kan_eps.txt | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$series_dir" ] || series_dir="Kan"
                 total=$(( $(wc -l < kan_eps.txt) - 1 ))
+                series_dir=$(head -1 kan_eps.txt | PYTHONUTF8=1 python3 kan_name.py --plain); [ -n "$series_dir" ] || [ "$total" -lt 2 ] || series_dir="Kan"
                 echo "Kan: $total episode(s) of '$series_dir' (limit $MAX_ITEMS)"
                 if [ "$total" -lt 1 ]; then echo "REASON=could not find episodes on this Kan page" >> "$GITHUB_ENV"; echo "::error::no episodes"; exit 1; fi
-                i=0; kan_failed=0
-                while IFS= read -r ep_url; do
+                drive_list "$series_dir"
+                i=0
+                while IFS=$'\t' read -r ep_url season num; do
                   i=$((i+1))
                   echo "::group::Kan episode $i/$total"
-                  season_slot "$series_dir" "$(printf '%s' "$ep_url" | sed -nE 's#.*/s([0-9]+)/[0-9]+/?$#\1#p')"
-                  if kan_episode "$ep_url" "$dir" "$idx"; then kan_flush; else kan_failed=$((kan_failed+1)); printf '%s\n' "$ep_url" >> failed.txt; fi
+                  place "$series_dir" "$season" "$num"
+                  r=0; kan_episode "$ep_url" "$dir" "$idx" || r=$?
+                  case $r in 0) kan_flush ;; 2) ;; *) printf '%s\n' "$ep_url" >> failed.txt ;; esac
                   echo "::endgroup::"
                 done < <(tail -n +2 kan_eps.txt)
-                rc=$kan_failed            # non-zero -> the release notes carry a "some items failed" warning
               else
                 echo "::group::Kan episode via the Israeli relay"
+                drive_list ""
                 kan_episode "$INPUT" "" "" || true
                 echo "::endgroup::"
               fi
@@ -468,20 +548,21 @@ jobs:
           # media still in out/ plus the items the per-item upload already sent to Drive
           prune_leftovers
           n=$(( $(media_count) + $(wc -l < names.txt) ))
-          if [ "$n" -eq 0 ]; then
+          skipped=$(wc -l < skipped.txt)
+          if [ "$skipped" -gt 0 ]; then echo "SKIPPED=$skipped" >> "$GITHUB_ENV"; echo "already in Drive (skipped): $skipped"; fi
+          if [ "$n" -eq 0 ] && [ "$skipped" -eq 0 ]; then
             # keep the most telling reason for the site (geo-block beats the generic "unavailable")
             r=$(grep -m1 -E "not made this video available in your country|^13 blocked" dl.log || grep -m1 -E "^ERROR" dl.log || echo "unknown error")
             echo "REASON=$(printf '%s' "$r" | sed 's/^ERROR: \[youtube\] [^:]*: //; s/k=[^&[:space:]]*/k=***/g' | tr -d '\r' | cut -c1-200)" >> "$GITHUB_ENV"
             echo "::error::nothing downloaded: $r"; exit 1
           fi
           echo "COUNT=$n" >> "$GITHUB_ENV"
-          # a playlist whose last attempt still had failures: say so in the release notes instead of implying all is well
-          if [ "$PLAYLIST" = yes ] && [ "${rc:-0}" -ne 0 ]; then
-            if [ -s failed.txt ]; then      # Kan / 13 know which items: "N of M" here, the list under "not downloaded:"
-              echo "WARN=$(wc -l < failed.txt) of $total items could not be downloaded (blocked, removed or a temporary error)" >> "$GITHUB_ENV"
-            else
-              echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary error)" >> "$GITHUB_ENV"
-            fi
+          # items that failed while others worked: say so in the release notes instead of implying all is well. Kan / 13
+          # know which ones ("N of M" here, the list under "not downloaded:"); a YouTube playlist only knows its exit code.
+          if [ -s failed.txt ]; then
+            echo "WARN=$(wc -l < failed.txt) of $total items could not be downloaded (blocked, removed or a temporary error)" >> "$GITHUB_ENV"
+          elif [ "$PLAYLIST" = yes ] && [ "${rc:-0}" -ne 0 ]; then
+            echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary error)" >> "$GITHUB_ENV"
           fi
           du -sh out; find out -type f -printf '%P\n'
 
@@ -489,11 +570,11 @@ jobs:
         id: deliver
         run: |
           if [ -n "$RCLONE_CONF_BASE64" ]; then
-            # playlists already installed it in the Download step; its installer exits 3 when rclone is present
+            # the Download step usually installed it already; its installer exits 3 when rclone is present
             command -v rclone >/dev/null || { curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1; }
             mkdir -p ~/.config/rclone && echo "$RCLONE_CONF_BASE64" | base64 -d > ~/.config/rclone/rclone.conf
             rclone copy out "gdrive:$DRIVE_DIR" --transfers 2
-            echo "where=Google Drive / $DRIVE_DIR ($COUNT file(s))" >> "$GITHUB_OUTPUT"
+            echo "where=Google Drive / $DRIVE_DIR ($COUNT file(s)${SKIPPED:+, $SKIPPED already there})" >> "$GITHUB_OUTPUT"
             find out -type f -printf '%P\n' >> names.txt      # what landed in Drive (per-item uploads already added theirs)
             find out -type f -delete
             printf '%s\n' "Uploaded $COUNT file(s) to Google Drive / $DRIVE_DIR" > out/_uploaded.txt
@@ -515,7 +596,7 @@ jobs:
         if: always() && inputs.job_id != ''
         run: |
           notes=$(mktemp)
-          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -n "$WARN" ]; then echo "warning: $WARN"; fi; if [ -s failed.txt ]; then echo "not downloaded:"; sed 's/^/  /' failed.txt; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
+          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -n "$WARN" ]; then echo "warning: $WARN"; fi; if [ -s failed.txt ]; then echo "not downloaded:"; sed 's/^/  /' failed.txt; fi; if [ -s skipped.txt ]; then echo "skipped: $(wc -l < skipped.txt) already in Drive"; sed 's/^/  /' skipped.txt; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
           files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
           [ -f reporter.pid ] && { kill "$(cat reporter.pid)" 2>/dev/null || true; }   # the live-progress reporter, if still up
           if [ -s release.id ]; then

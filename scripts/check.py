@@ -93,7 +93,7 @@ def main():
     print("3. Embedded helper scripts")
     dl = download_steps.get("Download")
     if dl:
-        for name in ("kan_name.py", "kan_list.py", "c13_list.py", "upload_one.sh"):
+        for name in ("kan_name.py", "kan_list.py", "c13_list.py", "upload_one.sh", "in_drive.sh"):
             m = re.search(r"cat > %s <<'(\w+)'\n(.*?)\n\1\n" % re.escape(name), dl, re.S)
             if not m:
                 report(False, name + " is embedded in the Download step")
