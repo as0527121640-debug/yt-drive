@@ -563,7 +563,8 @@ function jobCard(j,m){const d=details[j.id]||{},done=j.status==='completed',ok=d
  if(!done)body+=progress(j,d,m);
  else{const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
   if(!ok&&!f&&j.conclusion!=='cancelled')body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
-  if(/^warning: /m.test(d.summary||''))body+='<div class="warn">חלק מהפריטים לא ירדו: פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.</div>';
+  const w=(d.summary||'').match(/^warning: (?:(\d+) of (\d+) )?/m);   // "N of M items ..." when the run knows which ones
+  if(w)body+=`<div class="warn">${w[1]?`${w[1]} מתוך ${w[2]} פריטים לא ירדו`:'חלק מהפריטים לא ירדו'}${/13tv\.co\.il/.test(j.input||'')?'. רשת 13 חוסמת אותם להורדה מחוץ לחיבור ביתי, וזה קורה בעיקר בפרקים ישנים.':': פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.'}${w[1]?' הרשימה ב"פרטים".':''}</div>`;
   if(f&&!drive)body+=`<a class="dl" href="${f.url}">${ico('down')}${/\.zip$/i.test(f.name)?'הורדת כל הקבצים (ZIP)':'הורדה'} · ${(f.size/1048576).toFixed(1)}MB</a>`}
  const hasMore=!!(d.summary||j.run_url);
  if(open&&hasMore)body+=`<div class="jmore">${d.summary?`<pre>${esc(d.summary)}</pre>`:''}${j.run_url?`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}הריצה בגיטהאב</a>`:''}</div>`;

@@ -196,9 +196,10 @@ jobs:
           for u in list(dict.fromkeys(urls))[:limit]:
               print(u)
           PY
-          # Reshet 13 URL (the Worker's canonical shape) -> line 1 = the series name, then "entryId<TAB>title" per episode,
-          # at most $2. The catalogue is Kaltura OTT (partner 5031) with an anonymous session, as the 13tv.co.il player
-          # uses; ordering matches the Worker's list (by episode number; a season of 100+ gives the latest first).
+          # Reshet 13 URL (the Worker's canonical shape) -> line 1 = the series name, then "entryId<TAB>season<TAB>title"
+          # per episode (season 0 = the item has none), at most $2. The catalogue is Kaltura OTT (partner 5031) with an
+          # anonymous session, as the 13tv.co.il player uses; ordering matches the Worker's list (by episode number; a
+          # season of 100+ gives the latest first).
           cat > c13_list.py <<'PY'
           import json, re, sys, urllib.parse, urllib.request
           B = "https://5031.frp1.ott.kaltura.com/api_v3/service/"
@@ -252,7 +253,11 @@ jobs:
           print(title)
           for o in [e for e in eps if e.get("entryId")][:limit]:
               name = re.sub(r"\s*:\s*", " - ", re.sub(r"[\t\r\n]+", " ", o.get("name") or o["entryId"]))  # "פרק 7: שם" -> "פרק 7 - שם"
-              print("%s\t%s" % (o["entryId"], name))
+              try:
+                  season = int(float(meta(o, "SeasonNumber")))
+              except (TypeError, ValueError):
+                  season = 0
+              print("%s\t%d\t%s" % (o["entryId"], season, name))
           PY
           # Per-item upload for playlists (used with yt-dlp --exec after_move): send the finished file to Drive, delete
           # the local copy, and record its path for the release notes.
@@ -362,6 +367,16 @@ jobs:
             [ "$STREAM" = 1 ] || return 0
             find out -type f \( "${MEDIA_NAMES[@]}" \) -print0 | while IFS= read -r -d '' f; do bash ./upload_one.sh "$f"; done
           }
+          # Where an item of a season / series run goes: $1 = series folder, $2 = season number ('' or 0 = none). Sets
+          # $dir and $idx. Every season has its own folder and its own count from 01 - two seasons of one series used to
+          # share one folder and one running count, which read as a single season with holes (and Kan's "פרק 1" of two
+          # seasons could land on the same name).
+          slot_n=0; slot_prev=
+          season_slot() {
+            [ "$2" = "$slot_prev" ] || { slot_n=0; slot_prev=$2; }
+            slot_n=$((slot_n+1)); idx=$(printf '%02d' "$slot_n")
+            dir="$1"; case "$2" in ''|0) ;; *) dir="$1/עונה $2" ;; esac
+          }
           # ---- Reshet 13 ----
           # One episode by its Kaltura entryId. HLS only: the progressive mp4 renditions answer 404 everywhere, and the
           # HLS ladder tops out at 720p. Straight from the runner first; when that yields nothing (Israel-only content),
@@ -404,11 +419,12 @@ jobs:
               echo "13: $total episode(s) of '$series_dir' (limit $MAX_ITEMS)"
               if [ "$total" -lt 1 ]; then echo "REASON=could not find episodes for this 13 link" >> "$GITHUB_ENV"; echo "::error::no episodes"; exit 1; fi
               i=0; c13_failed=0
-              while IFS=$'\t' read -r entry name; do
+              while IFS=$'\t' read -r entry season name; do
                 i=$((i+1))
                 echo "::group::13 episode $i/$total"
                 if [ "$PLAYLIST" = yes ]; then
-                  if c13_episode "$entry" "$series_dir" "$(printf '%02d' "$i")" "$name"; then kan_flush; else c13_failed=$((c13_failed+1)); fi
+                  season_slot "$series_dir" "$season"
+                  if c13_episode "$entry" "$dir" "$idx" "$name"; then kan_flush; else c13_failed=$((c13_failed+1)); printf '%s\n' "$name" >> failed.txt; fi
                 else
                   c13_episode "$entry" "" "" "$name" || c13_failed=$((c13_failed+1))
                 fi
@@ -431,7 +447,8 @@ jobs:
                 while IFS= read -r ep_url; do
                   i=$((i+1))
                   echo "::group::Kan episode $i/$total"
-                  if kan_episode "$ep_url" "$series_dir" "$(printf '%02d' "$i")"; then kan_flush; else kan_failed=$((kan_failed+1)); fi
+                  season_slot "$series_dir" "$(printf '%s' "$ep_url" | sed -nE 's#.*/s([0-9]+)/[0-9]+/?$#\1#p')"
+                  if kan_episode "$ep_url" "$dir" "$idx"; then kan_flush; else kan_failed=$((kan_failed+1)); printf '%s\n' "$ep_url" >> failed.txt; fi
                   echo "::endgroup::"
                 done < <(tail -n +2 kan_eps.txt)
                 rc=$kan_failed            # non-zero -> the release notes carry a "some items failed" warning
@@ -460,7 +477,11 @@ jobs:
           echo "COUNT=$n" >> "$GITHUB_ENV"
           # a playlist whose last attempt still had failures: say so in the release notes instead of implying all is well
           if [ "$PLAYLIST" = yes ] && [ "${rc:-0}" -ne 0 ]; then
-            echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary error)" >> "$GITHUB_ENV"
+            if [ -s failed.txt ]; then      # Kan / 13 know which items: "N of M" here, the list under "not downloaded:"
+              echo "WARN=$(wc -l < failed.txt) of $total items could not be downloaded (blocked, removed or a temporary error)" >> "$GITHUB_ENV"
+            else
+              echo "WARN=some playlist items could not be downloaded (private, removed, blocked or a temporary error)" >> "$GITHUB_ENV"
+            fi
           fi
           du -sh out; find out -type f -printf '%P\n'
 
@@ -494,7 +515,7 @@ jobs:
         if: always() && inputs.job_id != ''
         run: |
           notes=$(mktemp)
-          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -n "$WARN" ]; then echo "warning: $WARN"; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
+          { echo "yt-drive [$JOB_ID]"; echo "source: $INPUT"; echo "format: $FORMAT"; echo "delivered: ${{ steps.deliver.outputs.where || 'FAILED' }}"; if [ -n "$REASON" ]; then echo "reason: $REASON"; fi; if [ -n "$WARN" ]; then echo "warning: $WARN"; fi; if [ -s failed.txt ]; then echo "not downloaded:"; sed 's/^/  /' failed.txt; fi; if [ -f names.txt ]; then echo "files:"; sed 's/^/  /' names.txt; fi; } > "$notes"
           files=(); for f in out/*; do [ -f "$f" ] && files+=("$f"); done
           [ -f reporter.pid ] && { kill "$(cat reporter.pid)" 2>/dev/null || true; }   # the live-progress reporter, if still up
           if [ -s release.id ]; then
