@@ -560,14 +560,16 @@ function jobCard(j,m){const d=details[j.id]||{},done=j.status==='completed',ok=d
  const drive=/Google Drive/i.test(d.summary||'');let body='';
  const meta=[];if(m.format)meta.push(m.format==='audio'?'MP3':'וידאו');if(m.format==='video'&&m.quality)meta.push(m.quality==='best'?'מיטבית':m.quality+'p');
  if(m.playlist==='yes')meta.push('רשימה'+(m.max?` עד ${m.max}`:''));meta.push(ago(j.created_at));
- const sk=+((d.summary||'').match(/^skipped: (\d+)/m)||[])[1]||0,none=sk&&/^delivered: Google Drive[^\n]*\(0 file/m.test(d.summary||'');   // items Drive already had
- const st=!done?'':ok?(drive?`<span class="st-ok">${none?'כבר בדרייב':'נשמר בדרייב'}</span> · `:''):j.conclusion==='cancelled'?'בוטל · ':'<span class="st-bad">נכשל</span> · ';
+ // sk = items Drive already had; all = that was everything (nothing new, nothing failed)
+ const sum=d.summary||'',sk=+(sum.match(/^skipped: (\d+)/m)||[])[1]||0,warned=/^warning: /m.test(sum),fresh=+(sum.match(/^delivered: Google Drive[^\n]*\((\d+) file/m)||[])[1];
+ const none=sk&&fresh===0,all=none&&!warned;
+ const st=!done?'':ok?(drive&&!(none&&warned)?`<span class="st-ok">${all?'כבר בדרייב':'נשמר בדרייב'}</span> · `:''):j.conclusion==='cancelled'?'בוטל · ':'<span class="st-bad">נכשל</span> · ';
  if(!done)body+=progress(j,d,m);
  else{const f=(d.files||[]).find(x=>!/_uploaded\.txt$/.test(x.name));
   if(!ok&&!f&&j.conclusion!=='cancelled')body+=`<div class="why">${esc(whyFailed(d.summary||''))}</div>`;
   const w=(d.summary||'').match(/^warning: (?:(\d+) of (\d+) )?/m);   // "N of M items ..." when the run knows which ones
   if(w)body+=`<div class="warn">${w[1]?`${w[1]} מתוך ${w[2]} פריטים לא ירדו`:'חלק מהפריטים לא ירדו'}${/13tv\.co\.il/.test(j.input||'')?'. רשת 13 חוסמת אותם להורדה מחוץ לחיבור ביתי, וזה קורה בעיקר בפרקים ישנים.':': פרטיים, הוסרו, חסומים, או תקלה זמנית. אפשר לנסות שוב.'}${w[1]?' הרשימה ב"פרטים".':''}</div>`;
-  if(sk)body+=`<div class="skip">${none?(sk===1?'הפריט כבר היה בדרייב, ולא הורדתי אותו שוב.':`כל ${sk} הפריטים כבר היו בדרייב, ולא הורדתי אותם שוב.`):(sk===1?'פריט אחד כבר היה בדרייב, ודילגתי עליו.':`${sk} פריטים כבר היו בדרייב, ודילגתי עליהם.`)}</div>`;
+  if(sk)body+=`<div class="skip">${all?(sk===1?'הפריט כבר היה בדרייב, ולא הורדתי אותו שוב.':`כל ${sk} הפריטים כבר היו בדרייב, ולא הורדתי אותם שוב.`):(sk===1?'פריט אחד כבר היה בדרייב, ודילגתי עליו.':`${sk} פריטים כבר היו בדרייב, ודילגתי עליהם.`)}</div>`;
   if(f&&!drive)body+=`<a class="dl" href="${f.url}">${ico('down')}${/\.zip$/i.test(f.name)?'הורדת כל הקבצים (ZIP)':'הורדה'} · ${(f.size/1048576).toFixed(1)}MB</a>`}
  const hasMore=!!(d.summary||j.run_url);
  if(open&&hasMore)body+=`<div class="jmore">${d.summary?`<pre>${esc(d.summary)}</pre>`:''}${j.run_url?`<a class="lnk" href="${esc(j.run_url)}" target="_blank" rel="noopener">${ico('ext')}הריצה בגיטהאב</a>`:''}</div>`;

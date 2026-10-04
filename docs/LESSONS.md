@@ -69,13 +69,22 @@ the next site of this kind, is the skill `cloud-job-site` (`references\youtube-t
   season has its own folder (`<series>/עונה N/`, numbered from 01) and the notes say "N of M items" and list them.
   Look at the run log (`file name:` / `13 blocked:` / `OK via` lines) before believing a report about Drive.
 - **Blocked items do download from the home PC** (done 2026-10-05 for the 8 items of season 1): the same playManifest
-  URL answers 200 there, `yt-dlp -f "bv*+ba/b" --merge-output-format mp4` works (the PC has no pycryptodomex, so the
-  AES-128 stream goes through ffmpeg: one item ~6 min, no parallel fragments). They reached Drive through Google Drive
+  URL answers 200 there - but plain yt-dlp gave short files here (IPv6, see below); the segments had to be fetched over
+  IPv4 by a small script (~11 min per 45-min episode at ~0.6 MB/s, 720p, ~470 MB). They reached Drive through Google Drive
   for desktop, which is installed on the PC (not auto-started; three accounts, the project's Drive is the `G:` one:
   `G:\האחסון שלי\13\...`). rclone's `drive.file` scope does not see files that arrive this way, so a later cloud run of
   the same item would add a second file with the same name instead of replacing it.
-- The OTT catalogue host (`5031.frp1.ott.kaltura.com`) sometimes resets every connection from the home PC (curl and
-  urllib alike, while the video CDN keeps working); `c13_list.py` cannot be tested locally then - use a cloud run.
+- **Never create a folder by hand where rclone will write.** The season folder `13/המעברה/עונה 1` was created from
+  the PC (Drive for desktop) minutes before a cloud run uploaded into the same path: rclone could not see it and made a
+  second `עונה 1` (Drive allows two folders with one name; Drive for desktop shows the later one as `עונה 1 (1)`). Let
+  a cloud run create the folder first, then put hand-made files into it.
+- **On this PC IPv6 to AWS CloudFront is broken** (TLS reset on every connection; IPv4 works), and Kaltura's video
+  CDN (`cfvod.kaltura.com`) and the OTT catalogue are on CloudFront. ffmpeg (which yt-dlp hands AES-128 HLS to when
+  pycryptodomex is missing) then silently skips the failed segments: two "finished" files were 33 and 25 min of 41 and
+  46. The fix that worked: fetch the playlist, key and every segment over IPv4 in Python, check the sum of `#EXTINF`
+  against ffprobe's duration, then remux the local copy (`-allowed_extensions ALL -c copy`).
+- For a local test of `c13_list.py` force IPv4 (see the CloudFront note above): wrap it with a `socket.getaddrinfo`
+  that always passes `AF_INET`, or `curl -4`.
 
 ## Keshet 12 (mako.co.il) - not supported
 - Episode pages redirect to a Radware bot wall with a CAPTCHA (`validate.perfdrive.com`), from curl and from a real

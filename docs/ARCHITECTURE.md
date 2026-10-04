@@ -58,8 +58,17 @@ Inputs: `input` (URL), `format` video|audio, `quality` best|1080|720|480 (defaul
      tv+mweb, web_safari+android_vr). Single video: done when a real media file exists. Playlist / list link: done when
      yt-dlp exits 0, otherwise the next client retries the missing items (`--download-archive`).
    - Kan episode: resolve the m3u8 from the episode page, wrap it in the relay URL, hand it to yt-dlp (audio = the audio
-     rendition only, `-f ba/b`). Kan season / series link: `kan_list.py` expands it to episode pages (limit `max_items`),
-     each downloaded in turn.
+     rendition only, `-f ba/b`). `kan_list.py` turns a series / season / episode link into "url, season, position in
+     the season" lines (limit `max_items`; an episode link reads its season page for the series name and position),
+     each downloaded in turn. Other Kan pages: one flat download as before.
+   - **Already in Drive?** Kan / 13 file names are known before the download: `in_drive.sh` looks each one up in an
+     `rclone lsf` of the series folder + the top of the Drive folder and skips it. A file found in an older layout
+     (`<series>/NN - name` before season folders, `name` at the top for a single episode) is moved to its new place with
+     `rclone moveto` (server side) instead. YouTube playlists: a `--flat-playlist -O "%(id)s %(filename)s"` pass (same
+     `-o` template and `--trim-filenames`, which counts `out/` and the folder too) predicts every file name; ids of the
+     ones Drive has go into `dl_archive.txt`, which yt-dlp skips. Single YouTube videos are not checked (the name needs
+     a full extraction). rclone's `drive.file` scope sees only files and folders rclone created - anything put into
+     Drive another way is invisible here and gets downloaded again.
    - Reshet 13: `c13_list.py` turns the link into Kaltura entry ids via the OTT catalogue (episode, season, or a whole
      series season by season; same order as the site's list). Each entry is fetched as HLS from
      `cdnapisec.kaltura.com/.../playManifest/entryId/<id>/format/applehttp/protocol/https/a.m3u8` (max 720p; the mp4
@@ -71,7 +80,8 @@ Inputs: `input` (URL), `format` video|audio, `quality` best|1080|720|480 (defaul
 4. **Deliver** - Drive (rclone remote `gdrive`) or, without Drive, one release asset (several files -> one zip).
 5. **Publish result** - prerelease `job-<id>`: notes with source, format, `delivered:`, optional `reason:` / `warning:`
    (Kan / 13 season runs: `N of M items could not be downloaded` + a `not downloaded:` list, which the page shows as
-   "N מתוך M פריטים לא ירדו") and the `files:` list. (The release already exists since the Download step - see live progress - so its notes are
+   "N מתוך M פריטים לא ירדו"), `skipped: N already in Drive` + the list (`... (moved from ...)` for an old-layout file;
+   the page: "N פריטים כבר היו בדרייב", or "כבר בדרייב" when nothing new was needed) and the `files:` list. (The release already exists since the Download step - see live progress - so its notes are
    replaced and the files uploaded; it is created here only if that early creation failed.)
 6. **Cleanup** - `job-*` releases older than 14 days are deleted.
 
@@ -94,14 +104,19 @@ YouTube/                                   (DRIVE_DIR, default "YouTube")
   <title>.mp4 | .mp3                       single video
   <playlist title>/NN - <title>.mp4|mp3    playlist items, zero-padded NN
 Kan/                                       (KAN_DRIVE_DIR, default "Kan")
-  <series> - <episode name>.mp4|mp3        one episode  (name = the page's JSON-LD "series | episode - subtitle")
-  <series>/עונה N/NN - <series> - <episode>.ext   a season or series: one folder per season, NN = position in the season
+  <series>/עונה N/NN - <series> - <episode>.ext   an episode, alone or in a season / series run (name = the page's
+                                           JSON-LD "series | episode - subtitle"; NN = position on the season page)
+  <series> - <episode>.mp4|mp3             a Kan page outside /p-<id>/ (no season known)
 13/                                        (C13_DRIVE_DIR, default "13")
-  <asset name>.mp4|mp3                     one episode, e.g. "המעברה, עונה 2, פרק 7 - שן תחת שן"
-  <series>/עונה N/NN - <asset name>.ext    a season or series (an item without a season number: <series>/NN - ...)
+  <series>/עונה N/NN - <asset name>.ext    an episode, alone or in a season / series run, e.g.
+                                           "המעברה/עונה 2/07 - המעברה, עונה 2, פרק 7 - שן תחת שן.mp4"
 ```
-NN counts the catalogue's items of that season from 01, so it is not always the episode number (season 1 of "המעברה"
-opens with a behind-the-scenes item: episode 1 is `02`). An item that failed keeps its number - the hole stays.
+One episode = one place, however it was asked for: a season run, a series run and a single-episode link all write the
+same path, which is what lets a repeat run find it. 13's NN is the catalogue's EpisodeNumber (falls back to the
+position in the season), so it is not always the number in the title: season 1 of "המעברה" opens with a
+behind-the-scenes item, episode 1 is `02`. A season without a number: `<series>/NN - ...`; no NN known: no prefix.
+Before 2026-10-05 seasons shared `<series>/NN - ...` with a running count, and single episodes landed at the top of
+the folder - a run that meets such a file moves it to its new place (see "Already in Drive?").
 Hebrew names are kept (`--windows-filenames`; yt-dlp turns `|` and `:` into the full-width `｜` `：`).
 
 ## Secrets and variables (names only - values are never in this repo)

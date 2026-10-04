@@ -74,7 +74,8 @@ A good result says `delivered: Google Drive / <folder> (N file(s))` and lists re
 | Kan tab: "index not created yet" or an old catalogue | `data/kan-index.json` missing / stale | `gh workflow run kan-index.yml -R ...` |
 | Drive upload fails with an auth error | rclone token revoked, or rclone's shared client_id was retired | re-authorize (section "Google Drive") - and do the own-OAuth-client item in `docs\TODO.md` |
 | Job shows "pending" for a few seconds | `workflow_dispatch` returns no run id; the page finds its run by the job id in the run title | normal |
-| A run failed midway through a playlist | items finished before the failure are already in Drive | rerun; `--download-archive` is per run, so finished items are downloaded again (Drive overwrites same names) |
+| A run failed midway through a playlist / season | items finished before the failure are already in Drive | rerun the same link: what Drive already has is skipped (notes: `skipped:`), only the rest is downloaded. Not for single YouTube videos, and not for files put into Drive by hand (rclone cannot see them) |
+| Two folders with the same name in Drive (e.g. two "עונה 1") | one was made by hand (Drive for desktop / web), rclone cannot see it and made its own | move the files into the one rclone made (in Drive for desktop it is the one named "... (1)", created later) and remove the empty one - with the user's OK |
 
 ## Maintenance
 - yt-dlp: installed fresh from pip on every run, nothing to do. Kan index: daily. `job-*` releases: cleaned after 14 days.
